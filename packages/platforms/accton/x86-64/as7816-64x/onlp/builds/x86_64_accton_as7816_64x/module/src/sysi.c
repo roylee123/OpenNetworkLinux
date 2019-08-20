@@ -250,6 +250,26 @@ sysi_fanctrl_overall_thermal_sensor_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT]
     return onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_MIN);
 }
 
+
+static int
+sysi_fanctrl_thermal_shutdown_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
+                                           onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT],
+                                           int *adjusted)
+{
+    int temp_4a;
+    char cmd[] = "i2cset -y -f 14 0x25 0x11 0x08";
+
+    /*If lm75 0x4a over 70 degree, shut the power down.*/
+    temp_4a = ti[3].mcelsius;
+    printf("temp_4a:%d", temp_4a);
+    if (temp_4a >= 70000) {
+        system(cmd);
+    }
+
+    return ONLP_STATUS_OK;
+}
+
+
 typedef int (*fan_control_policy)(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
                                   onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT],
                                   int *adjusted);
@@ -259,6 +279,7 @@ sysi_fanctrl_fan_fault_policy,
 sysi_fanctrl_fan_absent_policy,
 sysi_fanctrl_fan_unknown_speed_policy,
 sysi_fanctrl_overall_thermal_sensor_policy,
+sysi_fanctrl_thermal_shutdown_policy,
 };
 
 int
