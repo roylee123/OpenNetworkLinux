@@ -1,0 +1,44 @@
+From 988dcd1fbe777ccd5e0713c9378de1084df126f5 Mon Sep 17 00:00:00 2001
+From: roy_lee <roy_lee@accton.com>
+Date: Wed, 21 Aug 2019 16:03:38 +0800
+Subject: [PATCH] Update for management port for wedge100bf. Signed-off-by:
+ roy_lee <roy_lee@accton.com>
+
+---
+ drivers/net/ethernet/intel/ixgbe/ixgbe_main.c | 4 ++--
+ drivers/net/ethernet/intel/ixgbe/ixgbe_type.h | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c b/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+index 20a8018..33ca24c 100644
+--- a/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
++++ b/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+@@ -182,8 +182,8 @@ static int debug = -1;
+ module_param(debug, int, 0);
+ MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
+ 
+-MODULE_AUTHOR("Intel Corporation, <linux.nics@intel.com>");
+-MODULE_DESCRIPTION("Intel(R) 10 Gigabit PCI Express Network Driver");
++MODULE_AUTHOR("Intel Corporation, <linux.nics@intel.com>;Roy Revised");
++MODULE_DESCRIPTION("Intel(R) 10 Gigabit PCI Express Network Driver, Roy Revised");
+ MODULE_LICENSE("GPL");
+ MODULE_VERSION(DRV_VERSION);
+ 
+diff --git a/drivers/net/ethernet/intel/ixgbe/ixgbe_type.h b/drivers/net/ethernet/intel/ixgbe/ixgbe_type.h
+index ffa0ee5..ea1ba1e 100644
+--- a/drivers/net/ethernet/intel/ixgbe/ixgbe_type.h
++++ b/drivers/net/ethernet/intel/ixgbe/ixgbe_type.h
+@@ -81,8 +81,8 @@
+ #define IXGBE_DEV_ID_X550T		0x1563
+ #define IXGBE_DEV_ID_X550T1		0x15D1
+ #define IXGBE_DEV_ID_X550EM_X_KX4	0x15AA
+-#define IXGBE_DEV_ID_X550EM_X_KR	0x15AB
+-#define IXGBE_DEV_ID_X550EM_X_SFP	0x15AC
++#define IXGBE_DEV_ID_X550EM_X_KR	0x15AC
++#define IXGBE_DEV_ID_X550EM_X_SFP	0x15AB
+ #define IXGBE_DEV_ID_X550EM_X_10G_T	0x15AD
+ #define IXGBE_DEV_ID_X550EM_X_1G_T	0x15AE
+ #define IXGBE_DEV_ID_X550EM_X_XFI	0x15B0
+-- 
+2.11.0
+

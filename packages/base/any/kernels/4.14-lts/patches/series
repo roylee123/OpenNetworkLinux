@@ -8,3 +8,4 @@ driver-ixgbe-external-phy.patch
 driver-hwmon-max6620.patch
 driver-hwmon-max6620-fix-rpm-calc.patch
 driver-hwmon-max6620-update.patch
+0001-Update-for-management-port-for-wedge100bf.patch
