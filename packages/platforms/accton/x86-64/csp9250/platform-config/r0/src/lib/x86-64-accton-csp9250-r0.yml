@@ -16,6 +16,7 @@ x86-64-accton-csp9250-r0:
 
     args: >-
       console=tty0,
+      intel_iommu=off
 
   ##network
   ##  interfaces:

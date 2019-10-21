@@ -22,6 +22,7 @@ x86-64-accton-as5822-54x-r0:
 
     args: >-
       nopat
+      intel_iommu=off
       console=ttyS1,115200n8
 
   ##network

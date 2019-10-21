@@ -22,6 +22,7 @@ x86-64-accton-as7312-54x-r0:
 
     args: >-
       nopat
+      intel_iommu=off
       console=ttyS1,115200n8
       i2c-ismt.bus_speed=100
       i2c-ismt.delay=100
