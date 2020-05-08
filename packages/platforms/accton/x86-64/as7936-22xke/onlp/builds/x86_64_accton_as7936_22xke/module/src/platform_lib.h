@@ -29,7 +29,6 @@
 #include <onlplib/file.h>
 #include "x86_64_accton_as7936_22xke_log.h"
 
-#define CHASSIS_FAN_COUNT     5
 #define CHASSIS_LED_COUNT     5
 #define CHASSIS_PSU_COUNT     2
 
@@ -54,7 +53,7 @@ enum onlp_led_id
 {
     LED_RESERVED = 0,
     LED_PSU1,
-    LED_PSU2,    
+    LED_PSU2,
     LED_FAN,
     LED_DIAG,
     LED_LOC
@@ -76,8 +75,20 @@ enum onlp_thermal_id
     ONLP_THERMAL_ID_MAX,
 };
 
+#define CHASSIS_THERMAL_COUNT (ONLP_THERMAL_ID_MAX - CHASSIS_PSU_COUNT - 1)
 
-#define CHASSIS_THERMAL_COUNT (ONLP_THERMAL_ID_MAX - 1)
+enum fan_id {
+    FAN_1_ON_FAN_BOARD = 1,
+    FAN_2_ON_FAN_BOARD,
+    FAN_3_ON_FAN_BOARD,
+    FAN_4_ON_FAN_BOARD,
+    FAN_5_ON_FAN_BOARD,
+    FAN_1_ON_PSU_1,
+    FAN_1_ON_PSU_2,
+    ONLP_FAN_ID_MAX,
+};
+#define CHASSIS_FAN_COUNT (ONLP_FAN_ID_MAX - CHASSIS_PSU_COUNT - 1)
+
 
 typedef enum psu_type {
     PSU_TYPE_UNKNOWN,
@@ -90,16 +101,16 @@ int psu_serial_number_get(int id, char *serial, int serial_len);
 int psu_ym2651y_pmbus_info_get(int id, char *node, int *value);
 int psu_ym2651y_pmbus_info_set(int id, char *node, int value);
 int sfpi_i2c_read(int bus, uint8_t addr, uint8_t offset, int size,
-              uint8_t* rdata, uint32_t flags);
+                  uint8_t* rdata, uint32_t flags);
 int sfpi_i2c_readb(int bus, uint8_t addr, uint8_t offset, uint32_t flags);
 
 #define DEBUG_MODE 0
 
 #if (DEBUG_MODE == 1)
-	#define DEBUG_PRINT(fmt, args...)                                        \
+#define DEBUG_PRINT(fmt, args...)                                        \
 		printf("%s:%s[%d]: " fmt "\r\n", __FILE__, __FUNCTION__, __LINE__, ##args)
 #else
-	#define DEBUG_PRINT(fmt, args...)
+#define DEBUG_PRINT(fmt, args...)
 #endif
 
 #endif  /* __PLATFORM_LIB_H__ */

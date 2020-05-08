@@ -22,13 +22,13 @@ x86_64_accton_as7936_22xke_ucli_ucli__config__(ucli_context_t* uc)
 
 static ucli_module_t
 x86_64_accton_as7936_22xke_ucli_module__ =
-    {
-        "x86_64_accton_as7936_22xke_ucli",
-        NULL,
-        x86_64_accton_as7936_22xke_ucli_ucli_handlers__,
-        NULL,
-        NULL,
-    };
+{
+    "x86_64_accton_as7936_22xke_ucli",
+    NULL,
+    x86_64_accton_as7936_22xke_ucli_ucli_handlers__,
+    NULL,
+    NULL,
+};
 
 ucli_node_t*
 x86_64_accton_as7936_22xke_ucli_node_create(void)

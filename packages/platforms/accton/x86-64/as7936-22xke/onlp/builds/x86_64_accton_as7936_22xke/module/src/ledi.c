@@ -38,7 +38,7 @@
 
 /* LED related data
  */
-        
+
 enum led_light_mode {
     LED_MODE_OFF,
     LED_MODE_RED 				= 10,
@@ -69,37 +69,42 @@ typedef struct led_light_mode_map {
 } led_light_mode_map_t;
 
 led_light_mode_map_t led_map[] = {
-{LED_FAN,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
-{LED_FAN,  LED_MODE_RED,  ONLP_LED_MODE_RED},
-{LED_FAN,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
-{LED_FAN,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
+    {LED_FAN,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
+    {LED_FAN,  LED_MODE_RED,  ONLP_LED_MODE_RED},
+    {LED_FAN,  LED_MODE_YELLOW,  ONLP_LED_MODE_YELLOW},
+    {LED_FAN,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
+    {LED_FAN,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
 
-{LED_PSU1,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
-{LED_PSU1,  LED_MODE_RED,  ONLP_LED_MODE_RED},
-{LED_PSU1,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
-{LED_PSU1,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
+    {LED_PSU1,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
+    {LED_PSU1,  LED_MODE_RED,  ONLP_LED_MODE_RED},
+    {LED_PSU1,  LED_MODE_YELLOW,  ONLP_LED_MODE_YELLOW},
+    {LED_PSU1,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
+    {LED_PSU1,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
 
-{LED_PSU2,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
-{LED_PSU2,  LED_MODE_RED,  ONLP_LED_MODE_RED},
-{LED_PSU2,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
-{LED_PSU2,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
+    {LED_PSU2,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
+    {LED_PSU2,  LED_MODE_RED,  ONLP_LED_MODE_RED},
+    {LED_PSU2,  LED_MODE_YELLOW,  ONLP_LED_MODE_YELLOW},
+    {LED_PSU2,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
+    {LED_PSU2,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
 
-{LED_LOC,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
-{LED_LOC,  LED_MODE_RED,  ONLP_LED_MODE_RED},
-{LED_LOC,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
-{LED_LOC,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
+    {LED_LOC,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
+    {LED_LOC,  LED_MODE_RED,  ONLP_LED_MODE_RED},
+    {LED_LOC,  LED_MODE_YELLOW,  ONLP_LED_MODE_YELLOW},
+    {LED_LOC,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
+    {LED_LOC,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
 
-{LED_DIAG,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
-{LED_DIAG,  LED_MODE_RED,  ONLP_LED_MODE_RED},
-{LED_DIAG,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
-{LED_DIAG,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
+    {LED_DIAG,  LED_MODE_OFF,  ONLP_LED_MODE_OFF},
+    {LED_DIAG,  LED_MODE_RED,  ONLP_LED_MODE_RED},
+    {LED_DIAG,  LED_MODE_YELLOW,  ONLP_LED_MODE_YELLOW},
+    {LED_DIAG,  LED_MODE_GREEN,  ONLP_LED_MODE_GREEN},
+    {LED_DIAG,  LED_MODE_BLUE,  ONLP_LED_MODE_BLUE},
 };
 
 static char *leds[] =  /* must map with onlp_led_id */
 {
     "reserved",
     "psu1",
-    "psu2",    
+    "psu2",
     "fan",
     "diag",
     "loc",
@@ -114,36 +119,36 @@ static onlp_led_info_t linfo[] =
     {
         { ONLP_LED_ID_CREATE(LED_PSU1), "Chassis LED 1 (PSU1 LED)", 0 },
         ONLP_LED_STATUS_PRESENT,
-        ONLP_LED_CAPS_RED|ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
+        ONLP_LED_CAPS_RED|ONLP_LED_CAPS_YELLOW|ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
     },
     {
         { ONLP_LED_ID_CREATE(LED_PSU2), "Chassis LED 1 (PSU2 LED)", 0 },
         ONLP_LED_STATUS_PRESENT,
-        ONLP_LED_CAPS_RED|ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
-    },    
+        ONLP_LED_CAPS_RED|ONLP_LED_CAPS_YELLOW|ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
+    },
     {
         { ONLP_LED_ID_CREATE(LED_FAN), "Chassis LED 2 (FAN LED)", 0 },
         ONLP_LED_STATUS_PRESENT,
-        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
+        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_YELLOW| ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
     },
     {
         { ONLP_LED_ID_CREATE(LED_DIAG), "Chassis LED 3 (DIAG LED)", 0 },
         ONLP_LED_STATUS_PRESENT,
-        ONLP_LED_CAPS_ON_OFF | ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_RED | 
-        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
+        ONLP_LED_CAPS_ON_OFF | ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_RED |
+        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_YELLOW| ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
     },
     {
         { ONLP_LED_ID_CREATE(LED_LOC), "Chassis LED 4 (LOC LED)", 0 },
         ONLP_LED_STATUS_PRESENT,
         ONLP_LED_CAPS_ON_OFF|
-        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
+        ONLP_LED_CAPS_RED | ONLP_LED_CAPS_YELLOW| ONLP_LED_CAPS_GREEN | ONLP_LED_CAPS_BLUE,
     }
 };
 
 static int driver_to_onlp_led_mode(enum onlp_led_id id, enum led_light_mode driver_led_mode)
 {
     int i, nsize = sizeof(led_map)/sizeof(led_map[0]);
-    
+
     for (i = 0; i < nsize; i++)
     {
         if (id == led_map[i].id && driver_led_mode == led_map[i].driver_led_mode)
@@ -151,14 +156,14 @@ static int driver_to_onlp_led_mode(enum onlp_led_id id, enum led_light_mode driv
             return led_map[i].onlp_led_mode;
         }
     }
-    
+
     return 0;
 }
 
 static int onlp_to_driver_led_mode(enum onlp_led_id id, onlp_led_mode_t onlp_led_mode)
 {
     int i, nsize = sizeof(led_map)/sizeof(led_map[0]);
-    
+
     for(i = 0; i < nsize; i++)
     {
         if (id == led_map[i].id && onlp_led_mode == led_map[i].onlp_led_mode)
@@ -166,7 +171,7 @@ static int onlp_to_driver_led_mode(enum onlp_led_id id, onlp_led_mode_t onlp_led
             return led_map[i].driver_led_mode;
         }
     }
-    
+
     return 0;
 }
 
@@ -179,10 +184,10 @@ onlp_ledi_init(void)
     /*
      * LED GREEN
      */
-    
+
     onlp_ledi_mode_set(ONLP_LED_ID_CREATE(LED_DIAG), ONLP_LED_MODE_GREEN);
     onlp_ledi_mode_set(ONLP_LED_ID_CREATE(LED_LOC), ONLP_LED_MODE_GREEN);
-    
+
     return ONLP_STATUS_OK;
 }
 
@@ -190,9 +195,9 @@ int
 onlp_ledi_info_get(onlp_oid_t id, onlp_led_info_t* info)
 {
     int  lid, value;
-		
+
     VALIDATE(id);
-	
+
     lid = ONLP_OID_ID_GET(id);
 
     /* Set the onlp_oid_hdr_t and capabilities */
@@ -244,7 +249,7 @@ onlp_ledi_set(onlp_oid_t id, int on_or_off)
 int
 onlp_ledi_mode_set(onlp_oid_t id, onlp_led_mode_t mode)
 {
-    int  lid;	
+    int  lid;
     VALIDATE(id);
 
     lid = ONLP_OID_ID_GET(id);

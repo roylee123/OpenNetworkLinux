@@ -71,10 +71,10 @@ int onlp_file_read_string(char *filename, char *buffer, int buf_size, int data_l
     int ret;
 
     if (data_len >= buf_size) {
-	    return -1;
-	}
+        return -1;
+    }
 
-	ret = onlp_file_read_binary(filename, buffer, buf_size-1, data_len);
+    ret = onlp_file_read_binary(filename, buffer, buf_size-1, data_len);
 
     if (ret == 0) {
         buffer[buf_size-1] = '\0';
@@ -85,31 +85,34 @@ int onlp_file_read_string(char *filename, char *buffer, int buf_size, int data_l
 
 int psu_serial_number_get(int id, char *serial, int serial_len)
 {
-	int   size = 0;
-	int   ret  = ONLP_STATUS_OK; 
-	char *prefix = NULL;
+    int   size = 0;
+    int   ret  = ONLP_STATUS_OK;
+    char *prefix = NULL;
 
-	if (serial == NULL || serial_len < PSU_SERIAL_NUMBER_LEN) {
-		return ONLP_STATUS_E_PARAM;
-	}
+    if (serial == NULL || serial_len < PSU_SERIAL_NUMBER_LEN) {
+        return ONLP_STATUS_E_PARAM;
+    }
 
     switch(id)
     {
-        case PSU1_ID: prefix = PSU1_AC_PMBUS_PREFIX;
-                      break;
-        case PSU2_ID: prefix = PSU2_AC_PMBUS_PREFIX;
-                      break;
-        default: break;                
+    case PSU1_ID:
+        prefix = PSU1_AC_PMBUS_PREFIX;
+        break;
+    case PSU2_ID:
+        prefix = PSU2_AC_PMBUS_PREFIX;
+        break;
+    default:
+        break;
     }
 
-	ret = onlp_file_read((uint8_t*)serial, PSU_SERIAL_NUMBER_LEN, &size, "%s%s", prefix, "psu_mfr_serial");
+    ret = onlp_file_read((uint8_t*)serial, PSU_SERIAL_NUMBER_LEN, &size, "%s%s", prefix, "psu_mfr_serial");
     if (ret != ONLP_STATUS_OK || size != PSU_SERIAL_NUMBER_LEN) {
-		return ONLP_STATUS_E_INTERNAL;
+        return ONLP_STATUS_E_INTERNAL;
 
     }
 
-	serial[PSU_SERIAL_NUMBER_LEN] = '\0';
-	return ONLP_STATUS_OK;
+    serial[PSU_SERIAL_NUMBER_LEN] = '\0';
+    return ONLP_STATUS_OK;
 }
 
 
@@ -119,24 +122,27 @@ psu_type_t psu_type_get(int id, char* modelname, int modelname_len)
     char *node = NULL;
     char  model_name[PSU_MODEL_NAME_LEN + 1] = {0};
     char  fan_dir[PSU_FAN_DIR_LEN + 1] = {0};
-    
+
 
     /* Check AC model name */
     switch(id)
     {
-        case PSU1_ID: node = PSU1_AC_PMBUS_NODE(psu_mfr_model);
-                      break;
-        case PSU2_ID: node = PSU2_AC_PMBUS_NODE(psu_mfr_model);
-                      break;
-        default: break;                
+    case PSU1_ID:
+        node = PSU1_AC_PMBUS_NODE(psu_mfr_model);
+        break;
+    case PSU2_ID:
+        node = PSU2_AC_PMBUS_NODE(psu_mfr_model);
+        break;
+    default:
+        break;
     }
-    
+
     if (onlp_file_read_string(node, model_name, sizeof(model_name), 0) != 0) {
         return PSU_TYPE_UNKNOWN;
     }
-	
+
     if ((strncmp(model_name, "PTT1600", strlen("PTT1600")) != 0) &&
-        (strncmp(model_name, "FSJ001", strlen("FSJ001")) != 0)) {
+            (strncmp(model_name, "FSJ001", strlen("FSJ001")) != 0)) {
         return PSU_TYPE_UNKNOWN;
     }
 
@@ -146,43 +152,49 @@ psu_type_t psu_type_get(int id, char* modelname, int modelname_len)
 
     switch(id)
     {
-        case PSU1_ID: node = PSU1_AC_PMBUS_NODE(psu_fan_dir);
-                      break;
-        case PSU2_ID: node = PSU2_AC_PMBUS_NODE(psu_fan_dir);
-                      break;
-        default: break;                
+    case PSU1_ID:
+        node = PSU1_AC_PMBUS_NODE(psu_fan_dir);
+        break;
+    case PSU2_ID:
+        node = PSU2_AC_PMBUS_NODE(psu_fan_dir);
+        break;
+    default:
+        break;
     }
-    
+
     if (onlp_file_read_string(node, fan_dir, sizeof(fan_dir), 0) != 0) {
         return PSU_TYPE_UNKNOWN;
     }
 
     if (strncmp(model_name, "PTT1600", strlen("PTT1600")) == 0) {
         if ((strncmp(fan_dir, "B2F", strlen("B2F")) == 0) ||
-            (strncmp(fan_dir, "AFI", strlen("AFI")) == 0)) {
-                return PSU_TYPE_AC_B2F;
+                (strncmp(fan_dir, "AFI", strlen("AFI")) == 0)) {
+            return PSU_TYPE_AC_B2F;
         }
         else if ((strncmp(fan_dir, "F2B", strlen("F2B")) == 0) ||
-                (strncmp(fan_dir, "AFO", strlen("AFO")) == 0)) {
-                return PSU_TYPE_AC_F2B;
-         }
+                 (strncmp(fan_dir, "AFO", strlen("AFO")) == 0)) {
+            return PSU_TYPE_AC_F2B;
+        }
     }
-    
+
     return PSU_TYPE_AC_F2B;
 }
 
 int psu_ym2651y_pmbus_info_get(int id, char *node, int *value)
 {
-	char *prefix = NULL;
+    char *prefix = NULL;
     *value = 0;
 
     switch(id)
     {
-        case PSU1_ID: prefix = PSU1_AC_PMBUS_PREFIX;
-                      break;
-        case PSU2_ID: prefix = PSU2_AC_PMBUS_PREFIX;
-                      break;
-        default: break;                
+    case PSU1_ID:
+        prefix = PSU1_AC_PMBUS_PREFIX;
+        break;
+    case PSU2_ID:
+        prefix = PSU2_AC_PMBUS_PREFIX;
+        break;
+    default:
+        break;
     }
     if (onlp_file_read_int(value, "%s%s", prefix, node) < 0) {
         AIM_LOG_ERROR("Unable to read status from file(%s%s)\r\n", prefix, node);
@@ -194,15 +206,18 @@ int psu_ym2651y_pmbus_info_get(int id, char *node, int *value)
 
 int psu_ym2651y_pmbus_info_set(int id, char *node, int value)
 {
-	char *prefix = NULL;
+    char *prefix = NULL;
 
     switch(id)
     {
-        case PSU1_ID: prefix = PSU1_AC_PMBUS_PREFIX;
-                      break;
-        case PSU2_ID: prefix = PSU2_AC_PMBUS_PREFIX;
-                      break;
-        default: break;                
+    case PSU1_ID:
+        prefix = PSU1_AC_PMBUS_PREFIX;
+        break;
+    case PSU2_ID:
+        prefix = PSU2_AC_PMBUS_PREFIX;
+        break;
+    default:
+        break;
     }
     if (onlp_file_write_int(value, "%s%s", prefix, node) < 0) {
         AIM_LOG_ERROR("Unable to write data to file (%s%s)\r\n", prefix, node);
@@ -213,7 +228,7 @@ int psu_ym2651y_pmbus_info_set(int id, char *node, int value)
 }
 
 int sfpi_i2c_read(int bus, uint8_t addr, uint8_t offset, int size,
-              uint8_t* rdata, uint32_t flags)
+                  uint8_t* rdata, uint32_t flags)
 {
     int i;
     int fd;
@@ -221,7 +236,7 @@ int sfpi_i2c_read(int bus, uint8_t addr, uint8_t offset, int size,
     fd = onlp_i2c_open(bus, addr, flags);
 
     if(fd < 0) {
-       return fd;
+        return fd;
     }
 
     for(i = 0; i < size; i++) {
@@ -242,7 +257,7 @@ int sfpi_i2c_read(int bus, uint8_t addr, uint8_t offset, int size,
     close(fd);
     return 0;
 
- error:
+error:
     close(fd);
     return ONLP_STATUS_E_I2C;
 }

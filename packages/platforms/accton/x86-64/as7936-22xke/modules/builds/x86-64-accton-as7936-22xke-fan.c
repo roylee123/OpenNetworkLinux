@@ -33,7 +33,7 @@
 #define DRVNAME "as7936_22xke_fan"
 
 extern int accton_i2c_cpld_read (unsigned short cpld_addr, u8 reg);
-static struct as7936_22xke_fan_data *as7936_22xke_fan_update_device(struct device *dev);
+static struct fanData *update_device(struct device *dev);
 static ssize_t fan_show_value(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t set_duty_cycle(struct device *dev, struct device_attribute *da,
                               const char *buf, size_t count);
@@ -57,7 +57,7 @@ static const u8 fan_reg[] = {
 };
 
 /* Each client has this additional data */
-struct as7936_22xke_fan_data {
+struct fanData {
     struct device   *hwmon_dev;
     struct mutex     update_lock;
     char             valid;           /* != 0 if registers are valid */
@@ -76,7 +76,7 @@ enum fan_id {
 enum sysfs_fan_attributes {
     FAN_PRESENT_REG,
     FAN_DIR_REG,
-    FAN_DUTY_CYCLE_PERCENTAGE, /* Only one CPLD register to control duty cycle for all fans */
+    FAN_DUTY_CYCLE,     /* One CPLD reg controls all fans */
     FAN1_FRONT_SPEED_RPM,
     FAN2_FRONT_SPEED_RPM,
     FAN3_FRONT_SPEED_RPM,
@@ -111,7 +111,7 @@ enum sysfs_fan_attributes {
 #define DECLARE_FAN_FAULT_ATTR(index)      &sensor_dev_attr_fan##index##_fault.dev_attr.attr
 
 #define DECLARE_FAN_DUTY_CYCLE_SENSOR_DEV_ATTR(index) \
-    static SENSOR_DEVICE_ATTR(fan##index##_duty_cycle_percentage, S_IWUSR | S_IRUGO, fan_show_value, set_duty_cycle, FAN##index##_DUTY_CYCLE_PERCENTAGE)
+    static SENSOR_DEVICE_ATTR(fan##index##_duty_cycle_percentage, S_IWUSR | S_IRUGO, fan_show_value, set_duty_cycle, FAN##index##_DUTY_CYCLE)
 #define DECLARE_FAN_DUTY_CYCLE_ATTR(index) &sensor_dev_attr_fan##index##_duty_cycle_percentage.dev_attr.attr
 
 #define DECLARE_FAN_PRESENT_SENSOR_DEV_ATTR(index) \
@@ -122,14 +122,11 @@ enum sysfs_fan_attributes {
     static SENSOR_DEVICE_ATTR(fan##index##_dir, S_IRUGO, fan_show_value, NULL, FAN##index##_DIR)
 #define DECLARE_FAN_DIR_ATTR(index)      &sensor_dev_attr_fan##index##_dir.dev_attr.attr
 
-
 #define DECLARE_FAN_SPEED_RPM_SENSOR_DEV_ATTR(index, index2) \
     static SENSOR_DEVICE_ATTR(fan##index##_input, S_IRUGO, fan_show_value, NULL, FAN##index##_FRONT_SPEED_RPM);\
     static SENSOR_DEVICE_ATTR(fan##index2##_input, S_IRUGO, fan_show_value, NULL, FAN##index##_REAR_SPEED_RPM)
 #define DECLARE_FAN_SPEED_RPM_ATTR(index, index2)  &sensor_dev_attr_fan##index##_input.dev_attr.attr, \
                                            &sensor_dev_attr_fan##index2##_input.dev_attr.attr
-
-
 
 
 DECLARE_FAN_FAULT_SENSOR_DEV_ATTR(1);
@@ -155,7 +152,7 @@ DECLARE_FAN_DIR_SENSOR_DEV_ATTR(5);
 
 /* 1 fan duty cycle attribute in this platform */
 DECLARE_FAN_DUTY_CYCLE_SENSOR_DEV_ATTR();
-static struct attribute *as7936_22xke_fan_attributes[] = {
+static struct attribute *attributes[] = {
     /* fan related attributes */
     DECLARE_FAN_FAULT_ATTR(1),
     DECLARE_FAN_FAULT_ATTR(2),
@@ -185,12 +182,12 @@ static struct attribute *as7936_22xke_fan_attributes[] = {
 #define FAN_MAX_DUTY_CYCLE              100
 #define FAN_REG_VAL_TO_SPEED_RPM_STEP   150
 
-static int as7936_22xke_fan_read_value(struct i2c_client *client, u8 reg)
+static int read_value(struct i2c_client *client, u8 reg)
 {
     return i2c_smbus_read_byte_data(client, reg);
 }
 
-static int as7936_22xke_fan_write_value(struct i2c_client *client, u8 reg, u8 value)
+static int write_value(struct i2c_client *client, u8 reg, u8 value)
 {
     return i2c_smbus_write_byte_data(client, reg, value);
 }
@@ -242,7 +239,7 @@ static u8 reg_val_to_dir(u8 reg_val, enum fan_id id)
     return !(reg_val & mask);
 }
 
-static u8 is_fan_fault(struct as7936_22xke_fan_data *data, enum fan_id id)
+static u8 is_fan_fault(struct fanData *data, enum fan_id id)
 {
     u8 ret = 1;
     int front_fan_index = FAN1_FRONT_SPEED_RPM + id;
@@ -271,8 +268,8 @@ static ssize_t set_duty_cycle(struct device *dev, struct device_attribute *da,
     if (value < 0 || value > FAN_MAX_DUTY_CYCLE)
         return -EINVAL;
 
-    as7936_22xke_fan_write_value(client, 0x28, 0); /* Disable fan speed watch dog */
-    as7936_22xke_fan_write_value(client, fan_reg[FAN_DUTY_CYCLE_PERCENTAGE], duty_cycle_to_reg_val(value));
+    write_value(client, 0x28, 0); /* Disable fan speed watch dog */
+    write_value(client, fan_reg[FAN_DUTY_CYCLE], duty_cycle_to_reg_val(value));
     return count;
 }
 
@@ -288,14 +285,14 @@ static ssize_t fan_show_value(struct device *dev, struct device_attribute *da,
                               char *buf)
 {
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
-    struct as7936_22xke_fan_data *data = as7936_22xke_fan_update_device(dev);
+    struct fanData *data = update_device(dev);
     ssize_t ret = 0;
 
     if (data->valid) {
         switch (attr->index) {
-        case FAN_DUTY_CYCLE_PERCENTAGE:
+        case FAN_DUTY_CYCLE:
         {
-            u32 duty_cycle = reg_val_to_duty_cycle(data->reg_val[FAN_DUTY_CYCLE_PERCENTAGE]);
+            u32 duty_cycle = reg_val_to_duty_cycle(data->reg_val[FAN_DUTY_CYCLE]);
             ret = sprintf(buf, "%u\n", duty_cycle);
             break;
         }
@@ -355,14 +352,10 @@ static ssize_t fan_show_value(struct device *dev, struct device_attribute *da,
     return ret;
 }
 
-static const struct attribute_group as7936_22xke_fan_group = {
-    .attrs = as7936_22xke_fan_attributes,
-};
-
-static struct as7936_22xke_fan_data *as7936_22xke_fan_update_device(struct device *dev)
+static struct fanData *update_device(struct device *dev)
 {
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_fan_data *data = i2c_get_clientdata(client);
+    struct fanData *data = i2c_get_clientdata(client);
     int status;
 
     mutex_lock(&data->update_lock);
@@ -377,7 +370,7 @@ static struct as7936_22xke_fan_data *as7936_22xke_fan_update_device(struct devic
         /* Update fan data
          */
         for (i = 0; i < ARRAY_SIZE(data->reg_val); i++) {
-            status = as7936_22xke_fan_read_value(client, fan_reg[i]);
+            status = read_value(client, fan_reg[i]);
             if (status < 0) {
                 data->valid = 0;
                 mutex_unlock(&data->update_lock);
@@ -401,36 +394,36 @@ static struct as7936_22xke_fan_data *as7936_22xke_fan_update_device(struct devic
 static int as7936_22xke_fan_probe(struct i2c_client *client,
                                   const struct i2c_device_id *dev_id)
 {
-    struct as7936_22xke_fan_data *data;
+    struct fanData *data;
     int status;
+    static const struct attribute_group group = {
+        .attrs = attributes,
+    };
 
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA)) {
-        status = -EIO;
-        goto exit;
+        return -EIO;
     }
 
-    data = kzalloc(sizeof(struct as7936_22xke_fan_data), GFP_KERNEL);
+    data = devm_kzalloc(&client->dev, sizeof(struct fanData),
+                        GFP_KERNEL);
     if (!data) {
-        status = -ENOMEM;
-        goto exit;
+        return -ENOMEM;
     }
 
     i2c_set_clientdata(client, data);
     data->valid = 0;
     mutex_init(&data->update_lock);
-
     dev_info(&client->dev, "chip found\n");
 
     /* Register sysfs hooks */
-    status = sysfs_create_group(&client->dev.kobj, &as7936_22xke_fan_group);
+    status = devm_device_add_group(&client->dev, &group);
     if (status) {
-        goto exit_free;
+        return status;
     }
-
-    data->hwmon_dev = hwmon_device_register(&client->dev);
+    data->hwmon_dev = hwmon_device_register_with_info(&client->dev, DRVNAME,
+                      NULL, NULL, NULL);
     if (IS_ERR(data->hwmon_dev)) {
-        status = PTR_ERR(data->hwmon_dev);
-        goto exit_remove;
+        return PTR_ERR(data->hwmon_dev);
     }
 
     dev_info(&client->dev, "%s: fan '%s'\n",
@@ -438,21 +431,12 @@ static int as7936_22xke_fan_probe(struct i2c_client *client,
 
     return 0;
 
-exit_remove:
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_fan_group);
-exit_free:
-    kfree(data);
-exit:
-
-    return status;
 }
 
 static int as7936_22xke_fan_remove(struct i2c_client *client)
 {
-    struct as7936_22xke_fan_data *data = i2c_get_clientdata(client);
+    struct fanData *data = i2c_get_clientdata(client);
     hwmon_device_unregister(data->hwmon_dev);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_fan_group);
-
     return 0;
 }
 
@@ -460,16 +444,14 @@ static int as7936_22xke_fan_remove(struct i2c_client *client)
 static const unsigned short normal_i2c[] = { I2C_CLIENT_END };
 
 static const struct i2c_device_id as7936_22xke_fan_id[] = {
-    { "as7936_22xke_fan", 0 },
+    { DRVNAME, 0 },
     {}
 };
 MODULE_DEVICE_TABLE(i2c, as7936_22xke_fan_id);
 
 static struct i2c_driver as7936_22xke_fan_driver = {
     .class        = I2C_CLASS_HWMON,
-    .driver = {
-        .name     = DRVNAME,
-    },
+    .driver = {   .name     = DRVNAME,},
     .probe        = as7936_22xke_fan_probe,
     .remove       = as7936_22xke_fan_remove,
     .id_table     = as7936_22xke_fan_id,

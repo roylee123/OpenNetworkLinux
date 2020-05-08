@@ -35,6 +35,8 @@
 #include <linux/list.h>
 #include <linux/printk.h>
 
+#define DRV_NAME    "as7936_22xke_cpld"
+
 static LIST_HEAD(cpld_client_list);
 static struct mutex	 list_lock;
 
@@ -58,8 +60,7 @@ static ssize_t access(struct device *dev, struct device_attribute *da,
 static ssize_t show_version(struct device *dev, struct device_attribute *da,
                             char *buf);
 
-struct as7936_22xke_cpld_data {
-    struct device      *hwmon_dev;
+struct cpld_data {
     struct mutex        update_lock;
     u8  index;          /* CPLD index */
 };
@@ -85,13 +86,12 @@ struct cpld_i2c_t {
     int bus_num;
     unsigned short cpld_addr;
 } const cpld_i2cLoc[E_CPLD_IDMAX] = {
-    {11,0x60},
-    {12,0x61},
-    {13,0x62},
+    {11, 0x60},
+    {12, 0x61},
+    {13, 0x62},
 };
 
-enum as7936_22xke_cpld_sysfs_attributes {
-    /* transceiver attributes */
+enum cpld_sysfs_attributes {
     TRANSCEIVER_PRESENT_ATTR_ID(1),
     TRANSCEIVER_PRESENT_ATTR_ID(2),
     TRANSCEIVER_PRESENT_ATTR_ID(3),
@@ -264,19 +264,6 @@ static struct attribute *as7936_22xke_cpld3_attributes[] = {
     NULL
 };
 
-static const struct attribute_group as7936_22xke_cpld1_group = {
-    .attrs = as7936_22xke_cpld1_attributes,
-};
-
-
-static const struct attribute_group as7936_22xke_cpld2_group = {
-    .attrs = as7936_22xke_cpld2_attributes,
-};
-
-static const struct attribute_group as7936_22xke_cpld3_group = {
-    .attrs = as7936_22xke_cpld3_attributes,
-};
-
 int as7936_22xke_cpld_read(int bus_num, unsigned short cpld_addr, u8 reg)
 {
     struct list_head   *list_node = NULL;
@@ -292,14 +279,9 @@ int as7936_22xke_cpld_read(int bus_num, unsigned short cpld_addr, u8 reg)
         if (cpld_node->client->addr == cpld_addr
                 && cpld_node->client->adapter->nr == bus_num) {
             ret = i2c_smbus_read_byte_data(cpld_node->client, reg);
-
-            pr_err("[ROY]%s#%d, cpld_addr:%x bus_num:%d = %x\n",
-                   __func__, __LINE__, cpld_addr, bus_num, ret);
-
             break;
         }
     }
-
     mutex_unlock(&list_lock);
 
     return ret;
@@ -324,10 +306,6 @@ int as7936_22xke_cpld_write(int bus_num, unsigned short cpld_addr, u8 reg, u8 va
         cpld_node = list_entry(list_node, struct cpld_client_node, list);
         if (cpld_node->client->addr == cpld_addr
                 && cpld_node->client->adapter->nr == bus_num) {
-
-            pr_err("[ROY]%s#%d, cpld_addr:%x bus_num:%d = %x\n",
-                   __func__, __LINE__, cpld_addr, bus_num, ret);
-
             ret = i2c_smbus_write_byte_data(cpld_node->client, reg, value);
             break;
         }
@@ -350,7 +328,7 @@ static ssize_t show_status(struct device *dev, struct device_attribute *da,
 {
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
+    struct cpld_data *data = i2c_get_clientdata(client);
     int pidx;
     int status = 0;
     u8 reg = 0, mask = 0, revert = 1;
@@ -414,7 +392,7 @@ static ssize_t set_port_reset(struct device *dev, struct device_attribute *da,
 {
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
+    struct cpld_data *data = i2c_get_clientdata(client);
     long reset;
     int status, val, pidx, cpldi;
     u8 reg = 0x23, mask = 0;
@@ -423,11 +401,6 @@ static ssize_t set_port_reset(struct device *dev, struct device_attribute *da,
     if (status) {
         return status;
     }
-
-    pr_err("[ROY]%s#%d, status:%d \n",
-           __func__, __LINE__,  status);
-
-
 
     switch (attr->index) {
     case MODULE_RESET_1 ... MODULE_RESET_28:
@@ -473,7 +446,7 @@ static ssize_t set_tx_disable(struct device *dev, struct device_attribute *da,
 {
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
+    struct cpld_data *data = i2c_get_clientdata(client);
     long disable;
     int status, val;
     u8 reg = 0x0b, mask = 0;
@@ -568,7 +541,7 @@ static ssize_t access(struct device *dev, struct device_attribute *da,
     int status;
     u32 reg, val;
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
+    struct cpld_data *data = i2c_get_clientdata(client);
 
     if (sscanf(buf, "0x%x 0x%x", &reg, &val) != 2) {
         return -EINVAL;
@@ -604,7 +577,7 @@ static ssize_t show_version(struct device *dev, struct device_attribute *attr, c
 {
     int val = 0;
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
+    struct cpld_data *data = i2c_get_clientdata(client);
     int status = 0;
 
     mutex_lock(&data->update_lock);
@@ -635,18 +608,22 @@ static int as7936_22xke_cpld_probe(struct i2c_client *client,
                                    const struct i2c_device_id *dev_id)
 {
     int status;
-    struct as7936_22xke_cpld_data *data = NULL;
+    struct cpld_data *data = NULL;
+    static const struct attribute_group groups[] = {
+        {.attrs = as7936_22xke_cpld1_attributes,},
+        {.attrs = as7936_22xke_cpld2_attributes,},
+        {.attrs = as7936_22xke_cpld3_attributes,},
+    };
 
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA)) {
         dev_dbg(&client->dev, "i2c_check_functionality failed (0x%x)\n", client->addr);
-        status = -EIO;
-        goto exit;
+        return -EIO;
     }
 
-    data = kzalloc(sizeof(struct as7936_22xke_cpld_data), GFP_KERNEL);
+    data = devm_kzalloc(&client->dev, sizeof(struct cpld_data),
+                        GFP_KERNEL);
     if (!data) {
-        status = -ENOMEM;
-        goto exit;
+        return  -ENOMEM;
     }
 
     i2c_set_clientdata(client, data);
@@ -656,65 +633,34 @@ static int as7936_22xke_cpld_probe(struct i2c_client *client,
 
     /* Register sysfs hooks */
     switch(data->index) {
-    case 0:
-        status = sysfs_create_group(&client->dev.kobj, &as7936_22xke_cpld1_group);
-        break;
-    case 1:
-        status = sysfs_create_group(&client->dev.kobj, &as7936_22xke_cpld2_group);
-        break;
-    case 2:
-        status = sysfs_create_group(&client->dev.kobj, &as7936_22xke_cpld3_group);
+    case E_CPLD_ID1 ... E_CPLD_ID3:
+        status = devm_device_add_group(&client->dev, &groups[data->index]);
         break;
     default:
-        status = 1;
-        break;
+        return -EINVAL;
     }
     if (status) {
-        goto exit_free;
-    }
-
-    data->hwmon_dev = hwmon_device_register(&client->dev);
-    if (IS_ERR(data->hwmon_dev)) {
-        status = PTR_ERR(data->hwmon_dev);
-        goto exit_remove;
+        return status;
     }
 
     as7936_22xke_cpld_add_client(client);
 
     dev_info(&client->dev, "%s: cpld '%s'\n",
-             dev_name(data->hwmon_dev), client->name);
+             dev_name(&client->dev), client->name);
 
     return 0;
-
-exit_remove:
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld1_group);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld2_group);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld3_group);
-exit_free:
-    kfree(data);
-exit:
-
-    return status;
 }
 
 static int as7936_22xke_cpld_remove(struct i2c_client *client)
 {
-    struct as7936_22xke_cpld_data *data = i2c_get_clientdata(client);
-
-    hwmon_device_unregister(data->hwmon_dev);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld1_group);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld2_group);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_cpld3_group);
-    kfree(data);
     as7936_22xke_cpld_remove_client(client);
-
     return 0;
 }
 
 static const struct i2c_device_id as7936_22xke_cpld_id[] = {
-    { "as7936_22xke_cpld1", 0 },
-    { "as7936_22xke_cpld2", 1 },
-    { "as7936_22xke_cpld3", 2 },
+    { "as7936_22xke_cpld1", E_CPLD_ID1},
+    { "as7936_22xke_cpld2", E_CPLD_ID2},
+    { "as7936_22xke_cpld3", E_CPLD_ID3},
     {}
 };
 
@@ -723,7 +669,7 @@ MODULE_DEVICE_TABLE(i2c, as7936_22xke_cpld_id);
 static struct i2c_driver as7936_22xke_cpld_driver = {
     .class        = I2C_CLASS_HWMON,
     .driver = {
-        .name     = "as7936_22xke_cpld",
+        .name     = DRV_NAME,
     },
     .probe        = as7936_22xke_cpld_probe,
     .remove       = as7936_22xke_cpld_remove,

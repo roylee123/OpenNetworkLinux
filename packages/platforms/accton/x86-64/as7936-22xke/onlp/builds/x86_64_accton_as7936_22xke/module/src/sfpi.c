@@ -32,11 +32,11 @@
 #define EEPROM_START_OFFSET 0x0
 #define NUM_OF_SFP_PORT 	30
 static const int port_bus_index[NUM_OF_SFP_PORT] = {
-33, 34, 35, 36, 37, 38, 
-41, 42, 43, 44, 45, 46,
-49, 50, 51, 52, 53, 54, 55, 56,
-57, 58, 59, 60, 61, 62, 63, 64,
-30, 31,
+    33, 34, 35, 36, 37, 38,
+    41, 42, 43, 44, 45, 46,
+    49, 50, 51, 52, 53, 54, 55, 56,
+    57, 58, 59, 60, 61, 62, 63, 64,
+    30, 31,
 };
 
 #define PORT_BUS_INDEX(port) (port_bus_index[port])
@@ -50,7 +50,7 @@ static const int port_bus_index[NUM_OF_SFP_PORT] = {
 
 
 #define IS_SFP_PORT(_port) (_port >= 28 && _port <= 29)
-
+#define IS_QSFP_PORT(_port) (_port >= 0 && _port <= 27)
 
 /************************************************************
  *
@@ -80,9 +80,6 @@ onlp_sfpi_bitmap_get(onlp_sfp_bitmap_t* bmap)
 int
 onlp_sfpi_is_present(int port)
 {
-#if 0
-    return 1;
-#else
     /*
      * Return 1 if present.
      * Return 0 if not present.
@@ -95,7 +92,7 @@ onlp_sfpi_is_present(int port)
             return ONLP_STATUS_E_INTERNAL;
         }
     }
-    else if (port >= 16 && port <=27){
+    else if (port >= 16 && port <=27) {
         if (onlp_file_read_int(&present, MODULE_PRESENT_CPLD3_FORMAT, (port+1)) < 0) {
             AIM_LOG_ERROR("Unable to read present status from port(%d)\r\n", port);
             return ONLP_STATUS_E_INTERNAL;
@@ -105,7 +102,6 @@ onlp_sfpi_is_present(int port)
     }
 
     return present;
-#endif    
 }
 
 
@@ -138,7 +134,7 @@ onlp_sfpi_rx_los_bitmap_get(onlp_sfp_bitmap_t* dst)
         else
             AIM_BITMAP_MOD(dst, i, 0);
     }
-    
+
     return ONLP_STATUS_OK;
 }
 
@@ -164,7 +160,7 @@ onlp_sfpi_eeprom_read(int port, uint8_t data[256])
         return ONLP_STATUS_E_INTERNAL;
     }
 
-	return ONLP_STATUS_OK;
+    return ONLP_STATUS_OK;
 }
 
 int
@@ -202,26 +198,47 @@ onlp_sfpi_control_set(int port, onlp_sfp_control_t control, int value)
 
     switch(control)
     {
-        case ONLP_SFP_CONTROL_TX_DISABLE:
-            {
-                if(IS_SFP_PORT(port)) {
-                    if (onlp_file_write_int(0, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
-                        AIM_LOG_ERROR("Unable to set tx_disable status to port(%d)\r\n", port);
-                        rv = ONLP_STATUS_E_INTERNAL;
-                    }
-                    else {
-                        rv = ONLP_STATUS_OK;
-                    }
-                }
-                else {
-                    rv = ONLP_STATUS_E_UNSUPPORTED;
-                }
-                break;
+    case ONLP_SFP_CONTROL_RESET:
+    {
+        if(IS_QSFP_PORT(port)) {
+            char *reset_node = MODULE_RESET_CPLD2_FORMAT;
+            if (port > 15) {
+                reset_node = MODULE_RESET_CPLD3_FORMAT;
             }
 
-        default:
+            if (onlp_file_write_int(!!value, reset_node, (port+1)) < 0) {
+                AIM_LOG_ERROR("Unable to set tx_disable status to port(%d)\r\n", port);
+                rv = ONLP_STATUS_E_INTERNAL;
+            }
+            else {
+                rv = ONLP_STATUS_OK;
+            }
+        }
+        else {
             rv = ONLP_STATUS_E_UNSUPPORTED;
-            break;
+        }
+        break;
+    }
+    case ONLP_SFP_CONTROL_TX_DISABLE:
+    {
+        if(IS_SFP_PORT(port)) {
+            if (onlp_file_write_int(!!value, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
+                AIM_LOG_ERROR("Unable to set tx_disable status to port(%d)\r\n", port);
+                rv = ONLP_STATUS_E_INTERNAL;
+            }
+            else {
+                rv = ONLP_STATUS_OK;
+            }
+        }
+        else {
+            rv = ONLP_STATUS_E_UNSUPPORTED;
+        }
+        break;
+    }
+
+    default:
+        rv = ONLP_STATUS_E_UNSUPPORTED;
+        break;
     }
 
     return rv;
@@ -231,50 +248,72 @@ int
 onlp_sfpi_control_get(int port, onlp_sfp_control_t control, int* value)
 {
     int rv;
-    
+
     switch(control)
-        {
-        case ONLP_SFP_CONTROL_RX_LOS:
-            {
-                if(IS_SFP_PORT(port))
-                {
-            	    if (onlp_file_read_int(value, MODULE_RXLOS_FORMAT, (port+1)) < 0)
-            	    {
-                        AIM_LOG_ERROR("Unable to read rx_loss status from port(%d)\r\n", port);
-                        rv = ONLP_STATUS_E_INTERNAL;
-                    }
-                    else
-                    {
-                        rv = ONLP_STATUS_OK;
-                    }
-                    
-                }
-                else
-                {
-                    rv = ONLP_STATUS_E_UNSUPPORTED;
-                }
-                break;
-            }
-        case ONLP_SFP_CONTROL_TX_DISABLE:
-            {
-                if (IS_SFP_PORT(port)) {
-            	    if (onlp_file_read_int(value, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
-                        AIM_LOG_ERROR("Unable to read tx_disabled status from port(%d)\r\n", port);
-                        rv = ONLP_STATUS_E_INTERNAL;
-                    }
-                    else {
-                        rv = ONLP_STATUS_OK;
-                    }
-                }
-                else {
-                    rv = ONLP_STATUS_E_UNSUPPORTED;
-                }
-                break;
+    {
+    case ONLP_SFP_CONTROL_RESET:
+    {
+        if(IS_QSFP_PORT(port)) {
+            char *reset_node = MODULE_RESET_CPLD2_FORMAT;
+            if (port > 15) {
+                reset_node = MODULE_RESET_CPLD3_FORMAT;
             }
 
-        default:
+            if (onlp_file_read_int(value, reset_node, (port+1)) < 0) {
+                AIM_LOG_ERROR("Unable to set tx_disable status to port(%d)\r\n", port);
+                rv = ONLP_STATUS_E_INTERNAL;
+            }
+            else {
+                rv = ONLP_STATUS_OK;
+            }
+        }
+        else {
             rv = ONLP_STATUS_E_UNSUPPORTED;
         }
+        break;
+    }
+
+    case ONLP_SFP_CONTROL_RX_LOS:
+    {
+        if(IS_SFP_PORT(port))
+        {
+            if (onlp_file_read_int(value, MODULE_RXLOS_FORMAT, (port+1)) < 0)
+            {
+                AIM_LOG_ERROR("Unable to read rx_loss status from port(%d)\r\n", port);
+                rv = ONLP_STATUS_E_INTERNAL;
+            }
+            else
+            {
+                rv = ONLP_STATUS_OK;
+            }
+
+        }
+        else
+        {
+            rv = ONLP_STATUS_E_UNSUPPORTED;
+        }
+        break;
+    }
+    case ONLP_SFP_CONTROL_TX_DISABLE:
+    {
+        if (IS_SFP_PORT(port)) {
+            if (onlp_file_read_int(value, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
+                AIM_LOG_ERROR("Unable to read tx_disabled status from port(%d)\r\n", port);
+                rv = ONLP_STATUS_E_INTERNAL;
+            }
+            else {
+                rv = ONLP_STATUS_OK;
+            }
+        }
+        else {
+            rv = ONLP_STATUS_E_UNSUPPORTED;
+        }
+        break;
+    }
+
+    default:
+        rv = ONLP_STATUS_E_UNSUPPORTED;
+    }
 
     return rv;
 }

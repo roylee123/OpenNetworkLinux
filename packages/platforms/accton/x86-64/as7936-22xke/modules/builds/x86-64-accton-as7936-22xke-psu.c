@@ -34,6 +34,8 @@
 #include <linux/delay.h>
 #include <linux/dmi.h>
 
+
+#define DEV_NAME            "as7936_22xke_psu"
 #define CPLD_I2C_BUS        11
 #define CPLD_I2C_ADDR		(0x60)
 
@@ -41,16 +43,13 @@ static ssize_t show_status(struct device *dev, struct device_attribute *da, char
 
 extern int as7936_22xke_cpld_read(int bus_num, unsigned short cpld_addr, u8 reg);
 
-
-
 /* Addresses scanned
  */
 static const unsigned short normal_i2c[] = { I2C_CLIENT_END };
 
 /* Each client has this additional data
  */
-struct as7936_22xke_psu_data {
-    struct device      *hwmon_dev;
+struct psu_data {
     struct mutex        update_lock;
     char                valid;           /* !=0 if registers are valid */
     unsigned long       last_updated;    /* In jiffies */
@@ -59,7 +58,7 @@ struct as7936_22xke_psu_data {
     u8  psu_power_good;  /* Status(power_good) register read from CPLD */
 };
 
-static struct as7936_22xke_psu_data *update_device(struct device *dev);
+static struct psu_data *update_device(struct device *dev);
 
 enum as7936_22xke_psu_sysfs_attributes {
     PSU_PRESENT,
@@ -81,7 +80,7 @@ static ssize_t show_status(struct device *dev, struct device_attribute *da,
                            char *buf)
 {
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
-    struct as7936_22xke_psu_data *data = update_device(dev);
+    struct psu_data *data = update_device(dev);
     u8 status = 0;
 
     if (!data->valid) {
@@ -98,69 +97,46 @@ static ssize_t show_status(struct device *dev, struct device_attribute *da,
     return sprintf(buf, "%d\n", status);
 }
 
-static const struct attribute_group as7936_22xke_psu_group = {
-    .attrs = as7936_22xke_psu_attributes,
-};
+
 
 static int as7936_22xke_psu_probe(struct i2c_client *client,
                                   const struct i2c_device_id *dev_id)
 {
-    struct as7936_22xke_psu_data *data;
+    struct psu_data *data;
     int status;
+    static const struct attribute_group group = {
+        .attrs = as7936_22xke_psu_attributes,
+    };
 
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_I2C_BLOCK)) {
-        status = -EIO;
-        goto exit;
+        return -EIO;
     }
 
-    data = kzalloc(sizeof(struct as7936_22xke_psu_data), GFP_KERNEL);
+    data = devm_kzalloc(&client->dev, sizeof(struct psu_data),
+                        GFP_KERNEL);
     if (!data) {
-        status = -ENOMEM;
-        goto exit;
+        return -ENOMEM;
     }
 
     i2c_set_clientdata(client, data);
     data->valid = 0;
     data->index = dev_id->driver_data;
     mutex_init(&data->update_lock);
-
     dev_info(&client->dev, "chip found\n");
 
     /* Register sysfs hooks */
-    status = sysfs_create_group(&client->dev.kobj, &as7936_22xke_psu_group);
+    status = devm_device_add_group(&client->dev, &group);
     if (status) {
-        goto exit_free;
+        return status;
     }
-
-    data->hwmon_dev = hwmon_device_register_with_info(&client->dev, "as7936_22xke_psu",
-                      NULL, NULL, NULL);
-    if (IS_ERR(data->hwmon_dev)) {
-        status = PTR_ERR(data->hwmon_dev);
-        goto exit_remove;
-    }
-
     dev_info(&client->dev, "%s: psu '%s'\n",
-             dev_name(data->hwmon_dev), client->name);
+             dev_name(&client->dev), client->name);
 
     return 0;
-
-exit_remove:
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_psu_group);
-exit_free:
-    kfree(data);
-exit:
-
-    return status;
 }
 
 static int as7936_22xke_psu_remove(struct i2c_client *client)
 {
-    struct as7936_22xke_psu_data *data = i2c_get_clientdata(client);
-
-    hwmon_device_unregister(data->hwmon_dev);
-    sysfs_remove_group(&client->dev.kobj, &as7936_22xke_psu_group);
-    kfree(data);
-
     return 0;
 }
 
@@ -180,7 +156,7 @@ MODULE_DEVICE_TABLE(i2c, as7936_22xke_psu_id);
 static struct i2c_driver as7936_22xke_psu_driver = {
     .class        = I2C_CLASS_HWMON,
     .driver = {
-        .name     = "as7936_22xke_psu",
+        .name     = DEV_NAME,
     },
     .probe        = as7936_22xke_psu_probe,
     .remove       = as7936_22xke_psu_remove,
@@ -188,10 +164,14 @@ static struct i2c_driver as7936_22xke_psu_driver = {
     .address_list = normal_i2c,
 };
 
-static struct as7936_22xke_psu_data *update_device(struct device *dev)
+static struct psu_data *update_device(struct device *dev)
 {
     struct i2c_client *client = to_i2c_client(dev);
-    struct as7936_22xke_psu_data *data = i2c_get_clientdata(client);
+    struct psu_data *data = i2c_get_clientdata(client);
+    enum {
+        prst_addr = 0x51,
+        pgood_addr = 0x52,
+    };
 
     mutex_lock(&data->update_lock);
     if (time_after(jiffies, data->last_updated + HZ + HZ / 2)
@@ -200,13 +180,13 @@ static struct as7936_22xke_psu_data *update_device(struct device *dev)
         int power_good = 0;
 
         data->valid = 0;
-        dev_dbg(&client->dev, "Starting as7936_22xke update\n");
+        dev_dbg(&client->dev, "Starting %s update\n", DEV_NAME);
 
         /* Read psu present */
-        psu_present = as7936_22xke_cpld_read(CPLD_I2C_BUS, CPLD_I2C_ADDR, 0x51);
+        psu_present = as7936_22xke_cpld_read(CPLD_I2C_BUS, CPLD_I2C_ADDR, prst_addr);
 
         if (psu_present < 0) {
-            dev_dbg(&client->dev, "cpld reg 0x60 err %d\n", psu_present);
+            dev_dbg(&client->dev, "cpld reg 0x%x err %d\n", prst_addr, psu_present);
             goto exit;
         }
         else {
@@ -214,10 +194,10 @@ static struct as7936_22xke_psu_data *update_device(struct device *dev)
         }
 
         /* Read psu power good */
-        power_good = as7936_22xke_cpld_read(CPLD_I2C_BUS, CPLD_I2C_ADDR, 0x52);
+        power_good = as7936_22xke_cpld_read(CPLD_I2C_BUS, CPLD_I2C_ADDR, pgood_addr);
 
         if (power_good < 0) {
-            dev_dbg(&client->dev, "cpld reg 0x60 err %d\n", power_good);
+            dev_dbg(&client->dev, "cpld reg 0x%x err %d\n", pgood_addr, power_good);
             goto exit;
         }
         else {
