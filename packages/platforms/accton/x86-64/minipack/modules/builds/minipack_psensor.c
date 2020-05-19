@@ -69,7 +69,7 @@
 #define ATTR_MAX_LIST   		8
 
 #define TTY_DEVICE                      "/dev/ttyACM0"
-#define TTY_PROMPT                      "@bmc-oob"
+#define TTY_PROMPT                      "root@"
 #define TTY_USER                        "root"
 #define TTY_PASSWORD                    "0penBmc"
 #define TTY_BAUDRATE                    (57600)
@@ -549,8 +549,7 @@ static int _tty_login(struct file *tty_fd, char* buf, size_t max_size)
             return 0;
 
         DEBUG_INTR("%s-%d, tty_buf:%s\n", __func__, __LINE__, buf);
-        if ((strstr(buf, "bmc") != NULL) &&
-                (strstr(buf, "login:") != NULL))
+        if (strstr(buf, " login:") != NULL)
         {
             ret = _tty_writeNread(tty_fd, TTY_USER"\r",
                                   buf, max_size, TTY_LOGIN_RETRY_INTV);

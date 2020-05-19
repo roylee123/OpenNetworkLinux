@@ -30,8 +30,8 @@
 #include "platform_lib.h"
 
 #define TTY_DEVICE                      "/dev/ttyACM0"
-#define TTY_PROMPT                      "@bmc-oob:"
 #define TTY_USER                        "root"
+#define TTY_PROMPT                      TTY_USER"@"
 #define TTY_I2C_WAIT_REPLY              200000
 #define TTY_BMC_LOGIN_TIMEOUT           1000000
 #define TTY_BMC_LOGIN_INTERVAL          50000
@@ -173,8 +173,7 @@ static int tty_login(int fd, char *buf, int buf_size)
         }
 
         DEBUG_PRINT("Try to login, @%d!\n", i);
-        if (strstr(buf, "bmc") != NULL &&
-                (strstr(buf, "login:") != NULL))
+        if (strstr(buf, " login:") != NULL)
         {
             if (!tty_access_and_match(fd, TTY_USER"\r",TTY_BMC_LOGIN_TIMEOUT, "Password:")) {
                 if (!tty_access_and_match(fd, "0penBmc\r", TTY_BMC_LOGIN_TIMEOUT, TTY_PROMPT)) {
@@ -291,7 +290,7 @@ static int strip_off_prompt(char *buf, int max_size)
 {
     char *p;
 
-    p = strstr(buf, TTY_USER TTY_PROMPT);
+    p = strstr(buf, TTY_PROMPT);
     if (p != NULL && p < (buf+max_size)) {
         *p = '\0';
     }
