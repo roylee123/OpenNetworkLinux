@@ -65,7 +65,6 @@ typedef struct {
     sem_t mutex;
 } sfpi_port_status_t;
 
-static int sfpi_eeprom_close_all_channels(void);
 int onlp_read_pim_present(uint32_t *bmap);
 static int get_ports_presence(uint32_t pimId, uint32_t *pbmp);
 static int get_ports_lpmode(uint32_t pimId, uint32_t *pbmp);
@@ -126,8 +125,6 @@ int onlp_sfpi_init(void)
     }
 
     if (rv == 1) { /* shared memory was newly created*/
-        sfpi_eeprom_close_all_channels();
-
         /*Clear cache for muxes on PIM */
         SEM_LOCK;
         for (i = 0; i < NUM_OF_PIM; i++) {
@@ -373,47 +370,6 @@ int
 onlp_sfpi_rx_los_bitmap_get(onlp_sfp_bitmap_t* dst)
 {
     AIM_BITMAP_CLR_ALL(dst);
-    return ONLP_STATUS_OK;
-}
-
-static int
-sfpi_eeprom_close_all_channels(void)
-{
-    int i, k;
-    int value = 0 ;
-    int mux_1st = 0x70;
-    int mux_2st[] = {0x72, 0x71};
-    int offset = 0;
-    int channels = 8;
-    uint32_t present;
-
-    SEM_LOCK;
-    onlp_read_pim_present(&present);
-
-    for (i = 0; i < channels; i++) {
-        if (!(present & BIT(i)))
-            continue;
-
-        value = BIT(i);
-        /*Open only 1 channel of level-1 mux*/
-        if (onlp_i2c_writeb(I2C_BUS, mux_1st, offset, value, ONLP_I2C_F_FORCE) < 0) {
-            SEM_UNLOCK;
-            return ONLP_STATUS_E_INTERNAL;
-        }
-        /*Close mux on each PIM.*/
-        for (k = 0; k < AIM_ARRAYSIZE(mux_2st); k++) {
-            if (onlp_i2c_writeb(I2C_BUS, mux_2st[k], offset, 0, ONLP_I2C_F_FORCE) < 0) {
-                DEBUG_PRINT("Unable to write to I2C slave(0x%x)", mux_2st[k]);
-            }
-        }
-    }
-
-    /*close level-1 mux*/
-    if (onlp_i2c_writeb(I2C_BUS, mux_1st, offset, 0, ONLP_I2C_F_FORCE) < 0) {
-        SEM_UNLOCK;
-        return ONLP_STATUS_E_INTERNAL;
-    }
-    SEM_UNLOCK;
     return ONLP_STATUS_OK;
 }
 
@@ -710,7 +666,7 @@ static uint32_t fbfpgaio_read(uint32_t addr)
     return *(uint32_t*)offset;
 }
 
-#define PIM_STATUS_REG 0x40
+#define IOB_PIM_STATUS_REG 0x40
 
 static uint32_t dom_offset[] = {
     0x40000,
@@ -727,7 +683,7 @@ static uint32_t dom_offset[] = {
 #define QSFP_LPMODE_REG     0x78
 
 int onlp_read_pim_present(uint32_t *pbmp) {
-    uint32_t pim_status = fbfpgaio_read(PIM_STATUS_REG);
+    uint32_t pim_status = fbfpgaio_read(IOB_PIM_STATUS_REG );
     *pbmp = (pim_status >> 16); /*bit 23~16*/
     return ONLP_STATUS_OK;
 }
