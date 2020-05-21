@@ -278,16 +278,20 @@ static int i2c_writebF(int bus, uint8_t addr, uint8_t offset, uint8_t byte)
     return onlp_i2c_writeb( bus,  addr,  offset,  byte, ONLP_I2C_F_FORCE);
 }
 
+static inline int get_bus(uint32_t port)
+{
+    return (PORT_TO_PIM(port) + I2C_BUS +1);
+}
+
 /*Set the i2c mux of PIM to open channel to that port.*/
 static int
 sfpi_eeprom_channel_open(int port)
 {
-    uint32_t pim, reg, i, index, bus;
+    uint32_t reg, i, index, bus, pim;
     int offset = 0;
 
+    bus = get_bus(port);
     pim = PORT_TO_PIM(port);
-    bus = pim + I2C_BUS +1;
-
     /*Open only 1 channel on that PIM.*/
     index = sfpi_get_i2cmux_mapping(port);
     for (i = 0; i < NUM_I2C_MUX_ON_PIM; i++) {
@@ -390,8 +394,8 @@ static int st_sfpi_eeprom_read(int port, uint8_t data[256], int foffset)
         DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
         goto exit;
     }
-
-    sprintf(file, PORT_EEPROM_FORMAT, I2C_BUS);
+    int bus = get_bus(port);
+    sprintf(file, PORT_EEPROM_FORMAT, bus);
     fp = fopen(file, "r");
     if(fp == NULL) {
         AIM_LOG_ERROR("Unable to open the eeprom device file of port(%d)", port);
@@ -440,7 +444,8 @@ onlp_sfpi_dev_readb(int port, uint8_t devaddr, uint8_t addr)
         DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
         goto exit;
     }
-    ret = onlp_i2c_readb(I2C_BUS, devaddr, addr, ONLP_I2C_F_FORCE);
+    int bus = get_bus(port);
+    ret = onlp_i2c_readb(bus, devaddr, addr, ONLP_I2C_F_FORCE);
 exit:
     SEM_UNLOCK;
     return ret;
@@ -449,10 +454,7 @@ exit:
 int
 onlp_sfpi_dev_writeb(int port, uint8_t devaddr, uint8_t addr, uint8_t value)
 {
-    int ret, pim,  bus;
-
-    pim = PORT_TO_PIM(port);
-    bus = pim + I2C_BUS +1;
+    int ret;
 
     SEM_LOCK;
     ret = sfpi_eeprom_channel_open(port);
@@ -460,6 +462,7 @@ onlp_sfpi_dev_writeb(int port, uint8_t devaddr, uint8_t addr, uint8_t value)
         DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
         goto exit;
     }
+    int bus = get_bus(port);
     ret = i2c_writebF(bus, devaddr, addr, value);
 exit:
     SEM_UNLOCK;
@@ -469,10 +472,7 @@ exit:
 int
 onlp_sfpi_dev_readw(int port, uint8_t devaddr, uint8_t addr)
 {
-    int ret, pim,  bus;
-
-    pim = PORT_TO_PIM(port);
-    bus = pim + I2C_BUS +1;
+    int ret;
 
     SEM_LOCK;
     ret = sfpi_eeprom_channel_open(port);
@@ -480,6 +480,7 @@ onlp_sfpi_dev_readw(int port, uint8_t devaddr, uint8_t addr)
         DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
         goto exit;
     }
+    int bus = get_bus(port);
     ret = onlp_i2c_readw(bus, devaddr, addr, ONLP_I2C_F_FORCE);
 exit:
     SEM_UNLOCK;
@@ -489,10 +490,7 @@ exit:
 int
 onlp_sfpi_dev_writew(int port, uint8_t devaddr, uint8_t addr, uint16_t value)
 {
-    int ret, pim,  bus;
-
-    pim = PORT_TO_PIM(port);
-    bus = pim + I2C_BUS +1;
+    int ret;
 
     SEM_LOCK;
     ret = sfpi_eeprom_channel_open(port);
@@ -500,6 +498,7 @@ onlp_sfpi_dev_writew(int port, uint8_t devaddr, uint8_t addr, uint16_t value)
         DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
         goto exit;
     }
+    int bus = get_bus(port);
     ret = onlp_i2c_writew(bus, devaddr, addr, value, ONLP_I2C_F_FORCE);
 exit:
     SEM_UNLOCK;

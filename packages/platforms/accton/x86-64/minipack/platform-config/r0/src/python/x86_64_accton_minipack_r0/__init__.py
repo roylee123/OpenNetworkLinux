@@ -19,7 +19,14 @@ class OnlPlatform_x86_64_accton_minipack_r0(OnlPlatformAccton,
                 ])
 
         self.new_i2c_devices([
-                ('optoe1', 0x50, 1),
+                ('optoe1', 0x50, 2),
+                ('optoe1', 0x50, 3),
+                ('optoe1', 0x50, 4),
+                ('optoe1', 0x50, 5),
+                ('optoe1', 0x50, 6),
+                ('optoe1', 0x50, 7),
+                ('optoe1', 0x50, 8),
+                ('optoe1', 0x50, 9),
                 ])
 
         return True
