@@ -38,11 +38,12 @@ static char* devfiles__[] =  /* must map with onlp_thermal_id */
 {
     "reserved",
     "/sys/devices/platform/coretemp.0*temp1_input",
-    "/sys/bus/i2c/devices/22-0066*temp3_input",
-    "/sys/bus/i2c/devices/22-0066*temp4_input",
-    "/sys/bus/i2c/devices/22-0066*temp5_input",
-    "/sys/bus/i2c/devices/22-0066*temp6_input",
-    "/sys/bus/i2c/devices/22-0066*temp1_input",
+    "/sys/bus/i2c/devices/11-0060/temp1_input",
+    "/sys/bus/i2c/devices/11-0060/temp2_input",
+    "/sys/bus/i2c/devices/11-0060/temp3_input",
+    "/sys/bus/i2c/devices/11-0060/temp4_input",
+    "/sys/bus/i2c/devices/11-0060/temp5_input",
+    "/sys/bus/i2c/devices/11-0060/temp6_input",
     "/sys/bus/i2c/devices/22-004e*temp1_input",
     "/sys/bus/i2c/devices/22-004d*temp1_input",
     PSU1_AC_PMBUS_PREFIX"psu_temp1_input",
@@ -56,31 +57,35 @@ static onlp_thermal_info_t linfo[] = {
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_1_ON_MAINBOARD), "Chassis Thermal Sensor 1", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_1_ON_MAINBOARD), "CPU Side(0x4B)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_2_ON_MAINBOARD), "Chassis Thermal Sensor 2", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_2_ON_MAINBOARD), "MAC(TMP432 remote1)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_3_ON_MAINBOARD), "Chassis Thermal Sensor 3", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_3_ON_MAINBOARD), "LM75(0x4A)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_4_ON_MAINBOARD), "Chassis Thermal Sensor 4", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_4_ON_MAINBOARD), "LM75(0x4D)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_5_ON_MAINBOARD), "Chassis Thermal Sensor 5", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_5_ON_MAINBOARD), "LM75(0x4E)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_6_ON_MAINBOARD), "Chassis Thermal Sensor 6", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_6_ON_MAINBOARD), "LM75(0x4F)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },
-    {   { ONLP_THERMAL_ID_CREATE(THERMAL_7_ON_MAINBOARD), "Chassis Thermal Sensor 7", 0},
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_7_ON_MAINBOARD), "TMP75(0x4D)", 0},
+        ONLP_THERMAL_STATUS_PRESENT,
+        ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
+    },
+    {   { ONLP_THERMAL_ID_CREATE(THERMAL_8_ON_MAINBOARD), "TMP75(0x4E)", 0},
         ONLP_THERMAL_STATUS_PRESENT,
         ONLP_THERMAL_CAPS_ALL, 0, ONLP_THERMAL_THRESHOLD_INIT_DEFAULTS
     },

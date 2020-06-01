@@ -36,7 +36,7 @@ static const int port_bus_index[NUM_OF_SFP_PORT] = {
     41, 42, 43, 44, 45, 46,
     49, 50, 51, 52, 53, 54, 55, 56,
     57, 58, 59, 60, 61, 62, 63, 64,
-    30, 31,
+    31, 30
 };
 
 #define PORT_BUS_INDEX(port) (port_bus_index[port])
@@ -77,8 +77,15 @@ onlp_sfpi_bitmap_get(onlp_sfp_bitmap_t* bmap)
     return ONLP_STATUS_OK;
 }
 
-int
-onlp_sfpi_is_present(int port)
+static int sfp_remap(int port) {
+    if (IS_SFP_PORT(port)) { /*Reverse 10G OOBF ports*/
+        return (port == 28)? 29: 28;
+    } else {
+        return port;
+    }
+}
+
+int onlp_sfpi_is_present(int port)
 {
     /*
      * Return 1 if present.
@@ -87,7 +94,8 @@ onlp_sfpi_is_present(int port)
      */
     int present;
     if ((port >= 0 && port <=15) || (IS_SFP_PORT(port))) {
-        if (onlp_file_read_int(&present, MODULE_PRESENT_CPLD2_FORMAT, (port+1)) < 0) {
+        if (onlp_file_read_int(&present, MODULE_PRESENT_CPLD2_FORMAT,
+                               sfp_remap(port)+1) < 0) {
             AIM_LOG_ERROR("Unable to read present status from port(%d)\r\n", port);
             return ONLP_STATUS_E_INTERNAL;
         }
@@ -104,7 +112,6 @@ onlp_sfpi_is_present(int port)
     return present;
 }
 
-
 int
 onlp_sfpi_presence_bitmap_get(onlp_sfp_bitmap_t* dst)
 {
@@ -118,18 +125,21 @@ onlp_sfpi_rx_los_bitmap_get(onlp_sfp_bitmap_t* dst)
     /* Populate bitmap */
     for(i = 0; i < NUM_OF_SFP_PORT; i++)
     {
-        val=0;
         if(IS_SFP_PORT(i))
         {
-            if (onlp_file_read_int(&val, MODULE_RXLOS_FORMAT, i+1) < 0)
-            {
-                AIM_LOG_ERROR("Unable to read rx_loss status from port(%d)\r\n", i);
-            }
-
-            if(val)
-                AIM_BITMAP_MOD(dst, i, 1);
-            else
+            if (onlp_sfpi_is_present(i) == 1) {
+                val=0;
+                if (onlp_file_read_int(&val, MODULE_RXLOS_FORMAT, sfp_remap(i)+1) < 0)
+                {
+                    AIM_LOG_ERROR("Unable to read rx_loss status from port(%d)\r\n", i);
+                }
+                if(val)
+                    AIM_BITMAP_MOD(dst, i, 1);
+                else
+                    AIM_BITMAP_MOD(dst, i, 0);
+            } else {
                 AIM_BITMAP_MOD(dst, i, 0);
+            }
         }
         else
             AIM_BITMAP_MOD(dst, i, 0);
@@ -222,7 +232,8 @@ onlp_sfpi_control_set(int port, onlp_sfp_control_t control, int value)
     case ONLP_SFP_CONTROL_TX_DISABLE:
     {
         if(IS_SFP_PORT(port)) {
-            if (onlp_file_write_int(!!value, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
+            if (onlp_file_write_int(!!value, MODULE_TXDISABLE_FORMAT,
+                                    sfp_remap(port)+1) < 0) {
                 AIM_LOG_ERROR("Unable to set tx_disable status to port(%d)\r\n", port);
                 rv = ONLP_STATUS_E_INTERNAL;
             }
@@ -277,7 +288,8 @@ onlp_sfpi_control_get(int port, onlp_sfp_control_t control, int* value)
     {
         if(IS_SFP_PORT(port))
         {
-            if (onlp_file_read_int(value, MODULE_RXLOS_FORMAT, (port+1)) < 0)
+            if (onlp_file_read_int(value, MODULE_RXLOS_FORMAT,
+                                   sfp_remap(port)+1) < 0)
             {
                 AIM_LOG_ERROR("Unable to read rx_loss status from port(%d)\r\n", port);
                 rv = ONLP_STATUS_E_INTERNAL;
@@ -297,7 +309,8 @@ onlp_sfpi_control_get(int port, onlp_sfp_control_t control, int* value)
     case ONLP_SFP_CONTROL_TX_DISABLE:
     {
         if (IS_SFP_PORT(port)) {
-            if (onlp_file_read_int(value, MODULE_TXDISABLE_FORMAT, (port+1)) < 0) {
+            if (onlp_file_read_int(value, MODULE_TXDISABLE_FORMAT,
+                                   sfp_remap(port)+1) < 0) {
                 AIM_LOG_ERROR("Unable to read tx_disabled status from port(%d)\r\n", port);
                 rv = ONLP_STATUS_E_INTERNAL;
             }

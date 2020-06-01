@@ -26,7 +26,7 @@
 #include <onlp/platformi/fani.h>
 #include "platform_lib.h"
 
-#define MAX_FAN_SPEED 25500
+#define MAX_FAN_SPEED 19125     /* =(75*255)*/
 #define MAX_PSU_FAN_SPEED 25500
 
 #define CHASSIS_FAN_INFO(fid)		\

@@ -63,13 +63,14 @@ enum onlp_thermal_id
 {
     THERMAL_RESERVED = 0,
     THERMAL_CPU_CORE,
-    THERMAL_1_ON_MAINBOARD,  /* Main Board Bottom TMP432_1 Temp */
-    THERMAL_2_ON_MAINBOARD,  /* Main Board Bottom TMP432_2 Temp */
-    THERMAL_3_ON_MAINBOARD,  /* Main Board Bottom TMP432_3 Temp */
-    THERMAL_4_ON_MAINBOARD,  /* Main Board Bottom LM75_1 Temp */
-    THERMAL_5_ON_MAINBOARD,  /* Main Board Bottom LM75_2 Temp */
-    THERMAL_6_ON_MAINBOARD,  /* Main Board Bottom LM75_3 Temp */
-    THERMAL_7_ON_MAINBOARD,  /* Main Board Bottom LM75_4 Temp */
+    THERMAL_1_ON_MAINBOARD,  /* Main Board Bottom CPU_side Temp */
+    THERMAL_2_ON_MAINBOARD,  /* Main Board Bottom MAC Temp */
+    THERMAL_3_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
+    THERMAL_4_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
+    THERMAL_5_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
+    THERMAL_6_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
+    THERMAL_7_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
+    THERMAL_8_ON_MAINBOARD,  /* Main Board Bottom LM75 Temp */
     THERMAL_1_ON_PSU1,
     THERMAL_1_ON_PSU2,
     ONLP_THERMAL_ID_MAX,
@@ -88,7 +89,6 @@ enum fan_id {
     ONLP_FAN_ID_MAX,
 };
 #define CHASSIS_FAN_COUNT (ONLP_FAN_ID_MAX - CHASSIS_PSU_COUNT - 1)
-
 
 typedef enum psu_type {
     PSU_TYPE_UNKNOWN,

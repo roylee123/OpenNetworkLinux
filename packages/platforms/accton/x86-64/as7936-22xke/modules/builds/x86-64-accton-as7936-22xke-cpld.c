@@ -48,9 +48,10 @@ struct cpld_client_node {
 #define I2C_RW_RETRY_COUNT				10
 #define I2C_RW_RETRY_INTERVAL			60 /* ms */
 
+static ssize_t show_temp(struct device *dev, struct device_attribute *da,
+                         char *buf);
 static ssize_t show_status(struct device *dev, struct device_attribute *da,
                            char *buf);
-
 static ssize_t set_tx_disable(struct device *dev, struct device_attribute *da,
                               const char *buf, size_t count);
 static ssize_t set_port_reset(struct device *dev, struct device_attribute *da,
@@ -73,6 +74,7 @@ static const unsigned short normal_i2c[] = { I2C_CLIENT_END };
 #define TRANSCEIVER_RESET_ATTR_ID(index)        MODULE_RESET_##index
 #define TRANSCEIVER_TXDISABLE_ATTR_ID(index)   	MODULE_TXDISABLE_##index
 #define TRANSCEIVER_RXLOS_ATTR_ID(index)   		MODULE_RXLOS_##index
+#define TEMP_ATTR_ID(index)   		            TEMP_INPUT_##index
 
 typedef enum {
     E_CPLD_ID1 = 0,
@@ -154,6 +156,12 @@ enum cpld_sysfs_attributes {
     TRANSCEIVER_TXDISABLE_ATTR_ID(30),
     TRANSCEIVER_RXLOS_ATTR_ID(29),
     TRANSCEIVER_RXLOS_ATTR_ID(30),
+    TEMP_ATTR_ID (1),
+    TEMP_ATTR_ID (2),
+    TEMP_ATTR_ID (3),
+    TEMP_ATTR_ID (4),
+    TEMP_ATTR_ID (5),
+    TEMP_ATTR_ID (6),
     CPLD_VERSION,
     ACCESS,
 };
@@ -179,6 +187,12 @@ enum cpld_sysfs_attributes {
     &sensor_dev_attr_module_present_##index.dev_attr.attr, \
 	&sensor_dev_attr_module_tx_disable_##index.dev_attr.attr, \
 	&sensor_dev_attr_module_rx_los_##index.dev_attr.attr
+
+
+#define DECLARE_TEMP_DEVICE_ATTR(index) \
+	static SENSOR_DEVICE_ATTR(temp##index##_input, S_IRUGO, show_temp, NULL, TEMP_INPUT_##index)
+#define DECLARE_TEMP_ATTR(index)  \
+    &sensor_dev_attr_temp##index##_input.dev_attr.attr
 
 static SENSOR_DEVICE_ATTR(version, S_IRUGO, show_version, NULL, CPLD_VERSION);
 static SENSOR_DEVICE_ATTR(access, S_IWUSR, NULL, access, ACCESS);
@@ -214,10 +228,22 @@ DECLARE_TRANSCEIVER_SENSOR_DEVICE_ATTR(27);
 DECLARE_TRANSCEIVER_SENSOR_DEVICE_ATTR(28);
 DECLARE_SFP_TRANSCEIVER_SENSOR_DEVICE_ATTR(29);
 DECLARE_SFP_TRANSCEIVER_SENSOR_DEVICE_ATTR(30);
+DECLARE_TEMP_DEVICE_ATTR(1);
+DECLARE_TEMP_DEVICE_ATTR(2);
+DECLARE_TEMP_DEVICE_ATTR(3);
+DECLARE_TEMP_DEVICE_ATTR(4);
+DECLARE_TEMP_DEVICE_ATTR(5);
+DECLARE_TEMP_DEVICE_ATTR(6);
 
 static struct attribute *as7936_22xke_cpld1_attributes[] = {
     &sensor_dev_attr_version.dev_attr.attr,
     &sensor_dev_attr_access.dev_attr.attr,
+    DECLARE_TEMP_ATTR(1),
+    DECLARE_TEMP_ATTR(2),
+    DECLARE_TEMP_ATTR(3),
+    DECLARE_TEMP_ATTR(4),
+    DECLARE_TEMP_ATTR(5),
+    DECLARE_TEMP_ATTR(6),
     NULL
 };
 
@@ -322,6 +348,25 @@ static inline int cpld_writeb(e_cpld_id id, u8 reg, u8 value) {
                                    cpld_i2cLoc[id].cpld_addr,
                                    reg, value);
 }
+
+static ssize_t show_temp(struct device *dev, struct device_attribute *da,
+                         char *buf)
+{
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    struct i2c_client *client = to_i2c_client(dev);
+    u8 reg;
+    long value;
+
+    reg = 0x30 + (attr->index - TEMP_INPUT_1);
+    value = i2c_smbus_read_byte_data(client, reg);
+    if (value < 0) {
+        dev_dbg(dev, "Can't read reg:%02x\n", reg);
+        return value;
+    }
+
+    return sprintf(buf, "%ld\n", value*1000);
+}
+
 
 static ssize_t show_status(struct device *dev, struct device_attribute *da,
                            char *buf)
@@ -575,7 +620,6 @@ exit:
 
 static ssize_t show_version(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    int val = 0;
     struct i2c_client *client = to_i2c_client(dev);
     struct cpld_data *data = i2c_get_clientdata(client);
     int status = 0;
@@ -598,7 +642,7 @@ static ssize_t show_version(struct device *dev, struct device_attribute *attr, c
 
     mutex_unlock(&data->update_lock);
 
-    return sprintf(buf, "%d\n", val);
+    return sprintf(buf, "%d\n", status);
 exit:
     return status;
 }
@@ -607,7 +651,9 @@ exit:
 static int as7936_22xke_cpld_probe(struct i2c_client *client,
                                    const struct i2c_device_id *dev_id)
 {
+    struct device *hwmon_dev;
     int status;
+    struct device *dev = &client->dev;
     struct cpld_data *data = NULL;
     static const struct attribute_group groups[] = {
         {.attrs = as7936_22xke_cpld1_attributes,},
@@ -616,11 +662,11 @@ static int as7936_22xke_cpld_probe(struct i2c_client *client,
     };
 
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA)) {
-        dev_dbg(&client->dev, "i2c_check_functionality failed (0x%x)\n", client->addr);
+        dev_dbg(dev, "i2c_check_functionality failed (0x%x)\n", client->addr);
         return -EIO;
     }
 
-    data = devm_kzalloc(&client->dev, sizeof(struct cpld_data),
+    data = devm_kzalloc(dev, sizeof(struct cpld_data),
                         GFP_KERNEL);
     if (!data) {
         return  -ENOMEM;
@@ -629,12 +675,12 @@ static int as7936_22xke_cpld_probe(struct i2c_client *client,
     i2c_set_clientdata(client, data);
     data->index = dev_id->driver_data;
     mutex_init(&data->update_lock);
-    dev_info(&client->dev, "chip found\n");
+    dev_info(dev, "chip found\n");
 
     /* Register sysfs hooks */
     switch(data->index) {
     case E_CPLD_ID1 ... E_CPLD_ID3:
-        status = devm_device_add_group(&client->dev, &groups[data->index]);
+        status = devm_device_add_group(dev, &groups[data->index]);
         break;
     default:
         return -EINVAL;
@@ -643,10 +689,16 @@ static int as7936_22xke_cpld_probe(struct i2c_client *client,
         return status;
     }
 
-    as7936_22xke_cpld_add_client(client);
+    hwmon_dev = devm_hwmon_device_register_with_info(dev,
+                                 client->name, NULL, NULL, NULL);
+    if (IS_ERR(hwmon_dev)) {
+        dev_dbg(dev, "unable to register hwmon device\n");
+        return PTR_ERR(hwmon_dev);
+    }
 
-    dev_info(&client->dev, "%s: cpld '%s'\n",
-             dev_name(&client->dev), client->name);
+    as7936_22xke_cpld_add_client(client);
+    dev_info(dev, "%s: cpld '%s'\n",
+             dev_name(dev), client->name);
 
     return 0;
 }

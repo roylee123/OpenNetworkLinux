@@ -29,6 +29,7 @@
 #include <linux/sysfs.h>
 #include <linux/slab.h>
 #include <linux/dmi.h>
+#include <linux/kernel.h>
 
 #define DRVNAME "as7936_22xke_fan"
 
@@ -37,6 +38,8 @@ static struct fanData *update_device(struct device *dev);
 static ssize_t fan_show_value(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t set_duty_cycle(struct device *dev, struct device_attribute *da,
                               const char *buf, size_t count);
+static ssize_t show_version(struct device *dev, struct device_attribute *da,
+                            char *buf);
 
 /* fan related data, the index should match sysfs_fan_attributes
  */
@@ -44,15 +47,15 @@ static const u8 fan_reg[] = {
     0x80,       /* fan 1-8 present status in FAN board*/
     0x81,       /* fan DIR*/
     0x87,       /* fan PWM(for all fan) */
-    0x90,       /* front fan 1 speed(rpm) */
-    0x91,       /* front fan 2 speed(rpm) */
-    0x92,       /* front fan 3 speed(rpm) */
-    0x93,       /* front fan 4 speed(rpm) */
+    0x93,       /* front fan 1 speed(rpm) */
+    0x92,       /* front fan 2 speed(rpm) */
+    0x91,       /* front fan 3 speed(rpm) */
+    0x90,       /* front fan 4 speed(rpm) */
     0x94,       /* front fan 5 speed(rpm) */
-    0x98,       /* rear fan 1 speed(rpm) */
-    0x99,       /* rear fan 2 speed(rpm) */
-    0x9A,       /* rear fan 3 speed(rpm) */
-    0x9B,       /* rear fan 4 speed(rpm) */
+    0x9B,       /* rear fan 1 speed(rpm) */
+    0x9A,       /* rear fan 2 speed(rpm) */
+    0x99,       /* rear fan 3 speed(rpm) */
+    0x98,       /* rear fan 4 speed(rpm) */
     0x9C,       /* rear fan 5 speed(rpm) */
 };
 
@@ -86,7 +89,7 @@ enum sysfs_fan_attributes {
     FAN2_REAR_SPEED_RPM,
     FAN3_REAR_SPEED_RPM,
     FAN4_REAR_SPEED_RPM,
-    FAN5_REAR_SPEED_RPM,
+    FAN5_REAR_SPEED_RPM,  /*Above attr has coresponding register.*/
     FAN1_PRESENT,
     FAN2_PRESENT,
     FAN3_PRESENT,
@@ -102,6 +105,7 @@ enum sysfs_fan_attributes {
     FAN3_DIR,
     FAN4_DIR,
     FAN5_DIR,
+    CPLD_VERSION,
 };
 
 /* Define attributes
@@ -128,7 +132,6 @@ enum sysfs_fan_attributes {
 #define DECLARE_FAN_SPEED_RPM_ATTR(index, index2)  &sensor_dev_attr_fan##index##_input.dev_attr.attr, \
                                            &sensor_dev_attr_fan##index2##_input.dev_attr.attr
 
-
 DECLARE_FAN_FAULT_SENSOR_DEV_ATTR(1);
 DECLARE_FAN_FAULT_SENSOR_DEV_ATTR(2);
 DECLARE_FAN_FAULT_SENSOR_DEV_ATTR(3);
@@ -149,6 +152,7 @@ DECLARE_FAN_DIR_SENSOR_DEV_ATTR(2);
 DECLARE_FAN_DIR_SENSOR_DEV_ATTR(3);
 DECLARE_FAN_DIR_SENSOR_DEV_ATTR(4);
 DECLARE_FAN_DIR_SENSOR_DEV_ATTR(5);
+static SENSOR_DEVICE_ATTR(version, S_IRUGO, show_version, NULL, CPLD_VERSION);
 
 /* 1 fan duty cycle attribute in this platform */
 DECLARE_FAN_DUTY_CYCLE_SENSOR_DEV_ATTR();
@@ -175,12 +179,12 @@ static struct attribute *attributes[] = {
     DECLARE_FAN_DIR_ATTR(4),
     DECLARE_FAN_DIR_ATTR(5),
     DECLARE_FAN_DUTY_CYCLE_ATTR(),
+    &sensor_dev_attr_version.dev_attr.attr,
     NULL
 };
 
-#define FAN_DUTY_CYCLE_REG_MASK         0xF
 #define FAN_MAX_DUTY_CYCLE              100
-#define FAN_REG_VAL_TO_SPEED_RPM_STEP   150
+#define FAN_REG_VAL_TO_SPEED_RPM_STEP    75
 
 static int read_value(struct i2c_client *client, u8 reg)
 {
@@ -196,30 +200,12 @@ static int write_value(struct i2c_client *client, u8 reg, u8 value)
  */
 static u32 reg_val_to_duty_cycle(u8 reg_val)
 {
-    reg_val &= FAN_DUTY_CYCLE_REG_MASK;
-
-    if (!reg_val) {
-        return 0;
-    }
-
-    if (reg_val == 0xF) {
-        return FAN_MAX_DUTY_CYCLE;
-    }
-
-    return (reg_val * 6) + 10;
+    return min_t(int, (reg_val+1), FAN_MAX_DUTY_CYCLE);
 }
 
 static u8 duty_cycle_to_reg_val(u8 duty_cycle)
 {
-    if (duty_cycle < 16) {
-        return 0;
-    }
-
-    if (duty_cycle >= 100) {
-        return 0xF;
-    }
-
-    return (duty_cycle - 10) / 6;
+    return min_t(int, duty_cycle, FAN_MAX_DUTY_CYCLE) - 1;
 }
 
 static u32 reg_val_to_speed_rpm(u8 reg_val)
@@ -227,16 +213,41 @@ static u32 reg_val_to_speed_rpm(u8 reg_val)
     return (u32)reg_val * FAN_REG_VAL_TO_SPEED_RPM_STEP;
 }
 
+static enum fan_id remap_index(enum fan_id id)
+{
+    if (FAN5_ID != id) {
+       return (FAN4_ID - id);
+    }
+    return id;
+}
+
 static u8 reg_val_to_is_present(u8 reg_val, enum fan_id id)
 {
-    u8 mask = (1 << id);
+    u8 mask = (1 << remap_index(id));
     return !(reg_val & mask);
 }
 
 static u8 reg_val_to_dir(u8 reg_val, enum fan_id id)
 {
-    u8 mask = (1 << id);
+    u8 mask = (1 << remap_index(id));
     return !(reg_val & mask);
+}
+
+static ssize_t show_version(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct i2c_client *client = to_i2c_client(dev);
+    struct fanData *data = i2c_get_clientdata(client);
+    int status = 0;
+
+    mutex_lock(&data->update_lock);
+    status = read_value(client, 0x01);
+    if (unlikely(status < 0))
+    {
+        mutex_unlock(&data->update_lock);
+        return status;
+    }
+    mutex_unlock(&data->update_lock);
+    return sprintf(buf, "%d\n", status);
 }
 
 static u8 is_fan_fault(struct fanData *data, enum fan_id id)
@@ -271,14 +282,6 @@ static ssize_t set_duty_cycle(struct device *dev, struct device_attribute *da,
     write_value(client, 0x28, 0); /* Disable fan speed watch dog */
     write_value(client, fan_reg[FAN_DUTY_CYCLE], duty_cycle_to_reg_val(value));
     return count;
-}
-
-static int twos_complement_to_int(u16 data, u8 valid_bit, int mask)
-{
-    u16 valid_data	 = data & mask;
-    bool is_negative = valid_data >> (valid_bit - 1);
-
-    return is_negative ? (-(((~valid_data) & mask) + 1)) : valid_data;
 }
 
 static ssize_t fan_show_value(struct device *dev, struct device_attribute *da,
@@ -396,6 +399,7 @@ static int as7936_22xke_fan_probe(struct i2c_client *client,
 {
     struct fanData *data;
     int status;
+    struct device *dev = &client->dev;
     static const struct attribute_group group = {
         .attrs = attributes,
     };
@@ -404,7 +408,7 @@ static int as7936_22xke_fan_probe(struct i2c_client *client,
         return -EIO;
     }
 
-    data = devm_kzalloc(&client->dev, sizeof(struct fanData),
+    data = devm_kzalloc(dev, sizeof(struct fanData),
                         GFP_KERNEL);
     if (!data) {
         return -ENOMEM;
@@ -413,16 +417,18 @@ static int as7936_22xke_fan_probe(struct i2c_client *client,
     i2c_set_clientdata(client, data);
     data->valid = 0;
     mutex_init(&data->update_lock);
-    dev_info(&client->dev, "chip found\n");
+    dev_info(dev, "chip found\n");
 
     /* Register sysfs hooks */
-    status = devm_device_add_group(&client->dev, &group);
+    status = devm_device_add_group(dev, &group);
     if (status) {
         return status;
     }
-    data->hwmon_dev = hwmon_device_register_with_info(&client->dev, DRVNAME,
+
+    data->hwmon_dev = devm_hwmon_device_register_with_info(dev, DRVNAME,
                       NULL, NULL, NULL);
     if (IS_ERR(data->hwmon_dev)) {
+        dev_dbg(dev, "unable to register hwmon device\n");
         return PTR_ERR(data->hwmon_dev);
     }
 
@@ -431,13 +437,6 @@ static int as7936_22xke_fan_probe(struct i2c_client *client,
 
     return 0;
 
-}
-
-static int as7936_22xke_fan_remove(struct i2c_client *client)
-{
-    struct fanData *data = i2c_get_clientdata(client);
-    hwmon_device_unregister(data->hwmon_dev);
-    return 0;
 }
 
 /* Addresses to scan */
@@ -453,7 +452,6 @@ static struct i2c_driver as7936_22xke_fan_driver = {
     .class        = I2C_CLASS_HWMON,
     .driver = {   .name     = DRVNAME,},
     .probe        = as7936_22xke_fan_probe,
-    .remove       = as7936_22xke_fan_remove,
     .id_table     = as7936_22xke_fan_id,
     .address_list = normal_i2c,
 };

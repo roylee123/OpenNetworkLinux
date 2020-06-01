@@ -104,6 +104,7 @@ static int as7936_22xke_psu_probe(struct i2c_client *client,
 {
     struct psu_data *data;
     int status;
+    struct device *dev = &client->dev;
     static const struct attribute_group group = {
         .attrs = as7936_22xke_psu_attributes,
     };
@@ -112,7 +113,7 @@ static int as7936_22xke_psu_probe(struct i2c_client *client,
         return -EIO;
     }
 
-    data = devm_kzalloc(&client->dev, sizeof(struct psu_data),
+    data = devm_kzalloc(dev, sizeof(struct psu_data),
                         GFP_KERNEL);
     if (!data) {
         return -ENOMEM;
@@ -122,21 +123,16 @@ static int as7936_22xke_psu_probe(struct i2c_client *client,
     data->valid = 0;
     data->index = dev_id->driver_data;
     mutex_init(&data->update_lock);
-    dev_info(&client->dev, "chip found\n");
+    dev_info(dev, "chip found\n");
 
     /* Register sysfs hooks */
-    status = devm_device_add_group(&client->dev, &group);
+    status = devm_device_add_group(dev, &group);
     if (status) {
         return status;
     }
-    dev_info(&client->dev, "%s: psu '%s'\n",
-             dev_name(&client->dev), client->name);
+    dev_info(dev, "%s: psu '%s'\n",
+             dev_name(dev), client->name);
 
-    return 0;
-}
-
-static int as7936_22xke_psu_remove(struct i2c_client *client)
-{
     return 0;
 }
 
@@ -159,7 +155,6 @@ static struct i2c_driver as7936_22xke_psu_driver = {
         .name     = DEV_NAME,
     },
     .probe        = as7936_22xke_psu_probe,
-    .remove       = as7936_22xke_psu_remove,
     .id_table     = as7936_22xke_psu_id,
     .address_list = normal_i2c,
 };

@@ -37,15 +37,9 @@
 #include "x86_64_accton_as7936_22xke_int.h"
 #include "x86_64_accton_as7936_22xke_log.h"
 
-#define CPLD_VERSION_FORMAT			"/sys/bus/i2c/devices/%s/version"
-#define NUM_OF_CPLD         		3
 
-static char* cpld_path[NUM_OF_CPLD] =
-{
-    "11-0060",
-    "12-0061",
-    "13-0062"
-};
+
+
 
 const char*
 onlp_sysi_platform_get(void)
@@ -99,24 +93,40 @@ onlp_sysi_oids_get(onlp_oid_t* table, int max)
     return 0;
 }
 
+
+
 int
 onlp_sysi_platform_info_get(onlp_platform_info_t* pi)
 {
-#define MAX_STRLEN   8
+    #define MAX_STRLEN   8
+    #define CPLD_VERSION_FORMAT			"/sys/bus/i2c/devices/%s/version"
+    static char* cpld_path[] =
+    {
+        "11-0060",
+        "12-0061",
+        "13-0062",
+        "22-0068"
+    };
 
-    int   i, v[NUM_OF_CPLD] = {0};
-    char  vstr[NUM_OF_CPLD][MAX_STRLEN+1] = {};
+    static char cpld_vers[128]={0};
+    int   i, v[AIM_ARRAYSIZE(cpld_path)] = {0};
+    char  vstr[AIM_ARRAYSIZE(cpld_path)][MAX_STRLEN+1] = {{0}};
 
+    pi->cpld_versions = cpld_vers;
+    if (AIM_STRLEN(pi->cpld_versions) > 0) {
+        return ONLP_STATUS_OK;
+    }
     for (i = 0; i < AIM_ARRAYSIZE(cpld_path); i++) {
         v[i] = 0;
-
-        if(onlp_file_read_int(v+i, CPLD_VERSION_FORMAT , cpld_path[i]) < 0) {
+        if(onlp_file_read_int(&v[i], CPLD_VERSION_FORMAT , cpld_path[i]) < 0) {
+            memset(cpld_vers, 0, sizeof(cpld_vers));
             return ONLP_STATUS_E_INTERNAL;
         }
-
-        ONLPLIB_SNPRINTF(vstr[i], MAX_STRLEN, "%02x", v[i]);
+        ONLPLIB_SNPRINTF(vstr[i], MAX_STRLEN, "%02x.", v[i]);
+        AIM_STRCAT(cpld_vers, vstr[i]);
     }
-    pi->cpld_versions = aim_strjoin(".", (const char **)vstr, AIM_ARRAYSIZE(vstr));
+    /*strip off last char, a dot*/
+    cpld_vers[AIM_STRLEN(cpld_vers)-1] = '\0';
     return ONLP_STATUS_OK;
 
 #undef  MAX_STRLEN
@@ -125,7 +135,6 @@ onlp_sysi_platform_info_get(onlp_platform_info_t* pi)
 void
 onlp_sysi_platform_info_free(onlp_platform_info_t* pi)
 {
-    aim_free(pi->cpld_versions);
 }
 
 int
@@ -153,7 +162,8 @@ onlp_sysi_platform_manage_init(void)
 }
 
 #define FAN_DUTY_MAX  (100)
-#define FAN_DUTY_MIN  (52)
+#define FAN_DUTY_DEF  (50)
+#define FAN_DUTY_MIN  (33)
 
 static int
 sysi_fanctrl_fan_fault_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
@@ -202,36 +212,11 @@ sysi_fanctrl_fan_unknown_speed_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
                                       onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT],
                                       int *adjusted)
 {
-    int i, match = 0;
-    int fanduty;
-    int legal_duties[] = {FAN_DUTY_MIN, 64, 76, 88, FAN_DUTY_MAX};
-
-    *adjusted = 0;
-
-    if (onlp_file_read_int(&fanduty, FAN_NODE(fan_duty_cycle_percentage)) < 0) {
-        *adjusted = 1;
-        return onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_MIN);
-    }
-
-    /* Bring fan speed to min if current speed is not expected
-     */
-    for (i = 0; i < AIM_ARRAYSIZE(legal_duties); i++) {
-        if (fanduty != legal_duties[i]) {
-            continue;
-        }
-
-        match = 1;
-        break;
-    }
-
-    if (!match) {
-        *adjusted = 1;
-        return onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_MIN);
-    }
-
-    return ONLP_STATUS_OK;
+    *adjusted = 1;
+    return onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_DEF);
 }
 
+#if 0
 static int
 sysi_fanctrl_overall_thermal_sensor_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
         onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT],
@@ -262,6 +247,7 @@ sysi_fanctrl_overall_thermal_sensor_policy(onlp_fan_info_t fi[CHASSIS_FAN_COUNT]
 
     return onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_MIN);
 }
+#endif
 
 typedef int (*fan_control_policy)(onlp_fan_info_t fi[CHASSIS_FAN_COUNT],
                                   onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT],
@@ -271,13 +257,12 @@ fan_control_policy fan_control_policies[] = {
     sysi_fanctrl_fan_fault_policy,
     sysi_fanctrl_fan_absent_policy,
     sysi_fanctrl_fan_unknown_speed_policy,
-    sysi_fanctrl_overall_thermal_sensor_policy,
+    //sysi_fanctrl_overall_thermal_sensor_policy,
 };
 
 int
 onlp_sysi_platform_manage_fans(void)
 {
-#if 0
     int i, rc;
     onlp_fan_info_t fi[CHASSIS_FAN_COUNT];
     onlp_thermal_info_t ti[CHASSIS_THERMAL_COUNT];
@@ -306,20 +291,6 @@ onlp_sysi_platform_manage_fans(void)
         }
     }
 
-    return ONLP_STATUS_OK;
-
-    /* Get thermal sensor status
-     */
-    for (i = 0; i < CHASSIS_THERMAL_COUNT; i++) {
-        rc = onlp_thermali_info_get(ONLP_THERMAL_ID_CREATE(i+1), &ti[i]);
-
-        if (rc != ONLP_STATUS_OK) {
-            onlp_fani_percentage_set(ONLP_FAN_ID_CREATE(1), FAN_DUTY_MAX);
-            AIM_LOG_ERROR("Unable to get thermal(%d) status\r\n", i+1);
-            return ONLP_STATUS_E_INTERNAL;
-        }
-    }
-
     /* Apply thermal policy according the policy list,
      * If fan duty is adjusted by one of the policies, skip the others
      */
@@ -330,12 +301,11 @@ onlp_sysi_platform_manage_fans(void)
         if (!adjusted) {
             continue;
         }
-
         return rc;
     }
-#endif
     return ONLP_STATUS_OK;
 }
+
 int
 onlp_sysi_platform_manage_leds(void)
 {

@@ -314,9 +314,9 @@ static int getLedType(struct led_classdev *cdev, enum led_type *t)
 {
     int i;
     for (i = 0; i < LED_TYPE_MAX; i++) {
-        char fullName[32];
+        char fullName[32+1] = {0};
         snprintf(fullName, sizeof(fullName), DevNames[i]);
-        if (!strncmp(cdev->name, fullName, strlen(cdev->name))) {
+        if (!strcmp(cdev->name, fullName)) {
             break;
         }
     }

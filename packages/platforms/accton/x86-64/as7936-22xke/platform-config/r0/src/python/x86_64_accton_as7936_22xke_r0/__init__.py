@@ -108,11 +108,11 @@ class OnlPlatform_x86_64_accton_as7936_22xke_r0(OnlPlatformAccton,
             self.new_i2c_device('optoe1', 0x50, bstart)            
             subprocess.call(fmt_str % (port, bstart), shell=True)
 
-        # initialize OOB SFP+ port 29-30
-        self.new_i2c_device('optoe2', 0x50, 30)
-        subprocess.call('echo port29 > /sys/bus/i2c/devices/31-0050/port_name', shell=True)
+        # initialize OOB SFP+ port 29-30, reversed.
         self.new_i2c_device('optoe2', 0x50, 31)
-        subprocess.call('echo port30 > /sys/bus/i2c/devices/30-0050/port_name', shell=True)
+        subprocess.call('echo port29 > /sys/bus/i2c/devices/30-0050/port_name', shell=True)
+        self.new_i2c_device('optoe2', 0x50, 30)
+        subprocess.call('echo port30 > /sys/bus/i2c/devices/31-0050/port_name', shell=True)
 
       
         ir3570_check() 
