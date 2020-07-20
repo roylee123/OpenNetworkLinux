@@ -24,7 +24,6 @@
  *
  ***********************************************************/
 #include <time.h>
-#include <onlplib/i2c.h>
 #include <onlp/platformi/sfpi.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -41,17 +40,11 @@
 #define TYPES_OF_PIM            (2)
 #define NUM_OF_SFP_PORT         (128)
 #define SFP_PORT_PER_PIM        (NUM_OF_SFP_PORT/NUM_OF_PIM)
-#define I2C_BUS                 (1)
-#define PIM_POLL_INTERVAL       (5) /*in seconds*/
-#define PORT_POLL_INTERVAL      (8) /*per PIM, in seconds*/
-#define PORT_EEPROM_FORMAT      "/sys/bus/i2c/devices/%d-0050/eeprom"
+#define PIM_POLL_INTERVAL       (1) /*in seconds*/
+#define PORT_POLL_INTERVAL      (1) /*per PIM, in seconds*/
 
 #define PORT_TO_PIM(_port)        (_port / SFP_PORT_PER_PIM)
 #define PORT_OF_PIM(_port)        (_port % SFP_PORT_PER_PIM)
-
-#define NUM_I2C_MUX_ON_PIM      2
-static const int muxAddrOnPIM[NUM_I2C_MUX_ON_PIM] = {0x72, 0x71};
-static const int muxAddrRoot = 0x70;
 
 typedef struct {
     bool      valid;
@@ -62,9 +55,6 @@ typedef struct {
 typedef struct {
     present_status_t pim;
     present_status_t port_at_pim[NUM_OF_SFP_PORT/NUM_OF_PIM];
-    int root_muxReg;
-    int pim_muxReg[NUM_OF_PIM][NUM_I2C_MUX_ON_PIM];
-    sem_t mutex;
 } sfpi_port_status_t;
 
 int onlp_read_pim_present(uint32_t *bmap);
@@ -74,70 +64,24 @@ static int get_ports_reset(uint32_t pimId, uint32_t *pbmp);
 static int set_ports_lpmode(uint32_t pimId, uint32_t value);
 static int set_ports_reset(uint32_t pimId, uint32_t value);
 
-#define SEM_LOCK    do {sem_wait(&global_sfpi_st->mutex);} while(0)
-#define SEM_UNLOCK  do {sem_post(&global_sfpi_st->mutex);} while(0)
 
-sfpi_port_status_t *global_sfpi_st = NULL;
 
-/************************************************************
- *
- * SFPI Entry Points
- *
- ***********************************************************/
-static int sfpi_create_shm(key_t id) {
-    int rv;
-
-    if (global_sfpi_st == NULL) {
-        rv = onlp_shmem_create(id, sizeof(sfpi_port_status_t),
-                               (void**)&global_sfpi_st);
-        if (rv >= 0) {
-            if(pltfm_create_sem(&global_sfpi_st->mutex) != 0) {
-                AIM_DIE("onlpi_create_sem(): mutex_init failed\n");
-                return ONLP_STATUS_E_INTERNAL;
-            }
-        }
-        else {
-            AIM_DIE("Global %s created failed.", __func__);
-            return ONLP_STATUS_E_INTERNAL;
-        }
-    }
-    return rv;
-}
-
+static sfpi_port_status_t g_sfpiPortStat = {0};
 static int update_ports(int pim, bool valid, uint32_t present) {
     present_status_t *ports;
 
-    SEM_LOCK;
-    ports = &global_sfpi_st->port_at_pim[pim];
+    ports = &g_sfpiPortStat.port_at_pim[pim];
     ports->valid = valid;
     ports->present = present;
     ports->last_poll = time (NULL);
 
-    SEM_UNLOCK;
     return ONLP_STATUS_OK;
 }
 
+static uint32_t fbfpgaio_read(uint32_t addr);
 int onlp_sfpi_init(void)
 {
-    int i, j;
-    int rv = sfpi_create_shm(ONLP_SFPI_SHM_KEY);
-    if (rv < 0) {
-        AIM_DIE("onlp_sfpi_init::sfpi_create_shm created failed.");
-        return ONLP_STATUS_E_INTERNAL;
-    }
-
-    if (rv == 1) { /* shared memory was newly created*/
-        /*Clear cache for muxes on PIM */
-        SEM_LOCK;
-        for (i = 0; i < NUM_OF_PIM; i++) {
-            for (j = 0; j < NUM_I2C_MUX_ON_PIM; j++) {
-                global_sfpi_st->pim_muxReg[i][j] = -1;
-            }
-        }
-        global_sfpi_st->root_muxReg = -1;
-        SEM_UNLOCK;
-    }
-
+    int i;
     /* Unleash the Reset pin again.
      * It might be unleashed too early for some types of transcievers.
      */
@@ -186,32 +130,25 @@ _sfpi_port_present_remap_reg(uint32_t value)
 static int
 onlp_pim_is_present(int pim)
 {
-    time_t cur, elapse;
     uint32_t present;
     int ret;
     sfpi_port_status_t *ps;
 
-    SEM_LOCK;
-    ps = global_sfpi_st;
-    cur = time (NULL);
-    elapse = cur - ps->pim.last_poll;
-    if (!ps->pim.valid || (elapse > PIM_POLL_INTERVAL)) {
+    ps = &g_sfpiPortStat;
+    if (!ps->pim.valid ) {
         ret = onlp_read_pim_present(&present);
         if (ret < 0) {
             ps->pim.valid = false;
             ps->pim.present = 0;
             present = 0;
-            SEM_UNLOCK;
             return ONLP_STATUS_E_INTERNAL;
         } else {
             ps->pim.valid = true;
             ps->pim.present = present;
-            ps->pim.last_poll = time (NULL);
         }
     } else {
         present = ps->pim.present;
     }
-    SEM_UNLOCK;
     return !!(present & BIT(pim % NUM_OF_PIM));
 }
 
@@ -235,7 +172,7 @@ get_pim_port_present_bmap(int port, uint32_t *bit_array)
         return ONLP_STATUS_OK;
     }
 
-    ports = &global_sfpi_st->port_at_pim[pim];
+    ports = &g_sfpiPortStat.port_at_pim[pim];
     cur = time (NULL);
     elapse = cur - ports->last_poll;
 
@@ -255,66 +192,6 @@ get_pim_port_present_bmap(int port, uint32_t *bit_array)
     *bit_array = _sfpi_port_present_remap_reg(present);
     return ONLP_STATUS_OK;
 }
-
-/*Retrieve the channel order on a PIM.*/
-static int
-sfpi_get_i2cmux_mapping(int port)
-{
-    int pp = port % SFP_PORT_PER_PIM;
-    int index, base;
-
-    base  = (pp)/8*8;
-    index = pp % 8;
-    index = 7 - index;
-    if (index % 2) {
-        index --;
-    } else {
-        index ++;
-    }
-    index += base;
-    return index;
-}
-
-
-static int i2c_writebF(uint8_t addr, uint8_t offset, uint8_t byte)
-{
-    return onlp_i2c_writeb(I2C_BUS,  addr,  offset,  byte, ONLP_I2C_F_FORCE);
-}
-
-/*Set the i2c mux of PIM to open channel to that port.*/
-static int
-sfpi_eeprom_channel_open(int port)
-{
-    uint32_t pim, reg, i, index;
-    int offset = 0;
-
-    pim = PORT_TO_PIM(port);
-    reg = BIT(pim);
-    if (global_sfpi_st->root_muxReg != reg) {
-        if (i2c_writebF(muxAddrRoot, offset, reg) < 0) {
-            return ONLP_STATUS_E_INTERNAL;
-        }
-        global_sfpi_st->root_muxReg = reg;
-    }
-    /*Open only 1 channel on that PIM.*/
-    index = sfpi_get_i2cmux_mapping(port);
-    for (i = 0; i < NUM_I2C_MUX_ON_PIM; i++) {
-        if ((index/8) != i) {
-            reg = 0;
-        } else {
-            reg = BIT(index%8);
-        }
-
-        if (global_sfpi_st->pim_muxReg[pim][i] != reg) {
-            if (i2c_writebF(muxAddrOnPIM[i], offset, reg) < 0) {
-                return ONLP_STATUS_E_INTERNAL;
-            }
-            global_sfpi_st->pim_muxReg[pim][i] = reg;
-        }
-    }
-    return ONLP_STATUS_OK;
-}
-
 
 /*---------------Public APIs------------------------*/
 int
@@ -379,130 +256,6 @@ onlp_sfpi_rx_los_bitmap_get(onlp_sfp_bitmap_t* dst)
 {
     AIM_BITMAP_CLR_ALL(dst);
     return ONLP_STATUS_OK;
-}
-
-/* Due to PIM can be hot swapped, here the eeprom driver is always at root bus.
- * To avoid multi-slave condition, only 1 channel is opened on reading.
- */
-
-static int st_sfpi_eeprom_read(int port, uint8_t data[256], int foffset)
-{
-    FILE* fp;
-    int ret, bytes;
-    char file[64] = {0};
-
-    bytes = 256;
-    SEM_LOCK;
-    ret = sfpi_eeprom_channel_open(port);
-    if (ret != ONLP_STATUS_OK) {
-        DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
-        goto exit;
-    }
-
-    sprintf(file, PORT_EEPROM_FORMAT, I2C_BUS);
-    fp = fopen(file, "r");
-    if(fp == NULL) {
-        AIM_LOG_ERROR("Unable to open the eeprom device file of port(%d)", port);
-        ret = ONLP_STATUS_E_INTERNAL;
-        goto exit;
-    }
-
-    if (fseek(fp, foffset, SEEK_CUR) != 0) {
-        fclose(fp);
-        AIM_LOG_ERROR("Unable to set the file position indicator of port(%d)", port);
-        return ONLP_STATUS_E_INTERNAL;
-    }
-
-    ret = fread(data, 1, bytes, fp);
-    fclose(fp);
-    if (ret != bytes) {
-        ret = ONLP_STATUS_E_INTERNAL;
-        goto exit;
-    }
-    ret = ONLP_STATUS_OK;
-exit:
-    SEM_UNLOCK;
-    return ret;
-}
-
-int
-onlp_sfpi_eeprom_read(int port, uint8_t data[256])
-{
-    return st_sfpi_eeprom_read(port, data, 0);
-}
-
-int
-onlp_sfpi_dom_read(int port, uint8_t data[256])
-{
-    return st_sfpi_eeprom_read(port, data, 256);
-}
-
-int
-onlp_sfpi_dev_readb(int port, uint8_t devaddr, uint8_t addr)
-{
-    int ret;
-
-    SEM_LOCK;
-    ret = sfpi_eeprom_channel_open(port);
-    if (ret != ONLP_STATUS_OK) {
-        DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
-        goto exit;
-    }
-    ret = onlp_i2c_readb(I2C_BUS, devaddr, addr, ONLP_I2C_F_FORCE);
-exit:
-    SEM_UNLOCK;
-    return ret;
-}
-
-int
-onlp_sfpi_dev_writeb(int port, uint8_t devaddr, uint8_t addr, uint8_t value)
-{
-    int ret;
-
-    SEM_LOCK;
-    ret = sfpi_eeprom_channel_open(port);
-    if (ret != ONLP_STATUS_OK) {
-        DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
-        goto exit;
-    }
-    ret = i2c_writebF(devaddr, addr, value);
-exit:
-    SEM_UNLOCK;
-    return ret;
-}
-
-int
-onlp_sfpi_dev_readw(int port, uint8_t devaddr, uint8_t addr)
-{
-    int ret;
-
-    SEM_LOCK;
-    ret = sfpi_eeprom_channel_open(port);
-    if (ret != ONLP_STATUS_OK) {
-        DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
-        goto exit;
-    }
-    ret = onlp_i2c_readw(I2C_BUS, devaddr, addr, ONLP_I2C_F_FORCE);
-exit:
-    SEM_UNLOCK;
-    return ret;
-}
-
-int
-onlp_sfpi_dev_writew(int port, uint8_t devaddr, uint8_t addr, uint16_t value)
-{
-    int ret;
-
-    SEM_LOCK;
-    ret = sfpi_eeprom_channel_open(port);
-    if (ret != ONLP_STATUS_OK) {
-        DEBUG_PRINT("Unable to set i2c channel for the module_eeprom of port(%d, %d)", port, ret);
-        goto exit;
-    }
-    ret = onlp_i2c_writew(I2C_BUS, devaddr, addr, value, ONLP_I2C_F_FORCE);
-exit:
-    SEM_UNLOCK;
-    return ret;
 }
 
 int
@@ -649,7 +402,6 @@ static uint32_t fbfpgaio_write(uint32_t addr, uint32_t input_data)
                              + (unsigned long) addr);
     unsigned int data = (unsigned int) (input_data & 0xFFFFFFFF);
     *address = data;
-
     return ONLP_STATUS_OK;
 }
 
@@ -667,7 +419,7 @@ static uint32_t fbfpgaio_read(uint32_t addr)
 
 #define IOB_PIM_STATUS_REG 0x40
 
-static uint32_t dom_offset[] = {
+static const uint32_t DomOffset[] = {
     0x40000,
     0x48000,
     0x50000,
@@ -688,10 +440,10 @@ int onlp_read_pim_present(uint32_t *pbmp) {
 }
 
 static int read_pom_reg(uint32_t pimId, uint32_t reg, uint32_t *pbmp) {
-    if (pimId >= AIM_ARRAYSIZE(dom_offset)) {
+    if (pimId >= AIM_ARRAYSIZE(DomOffset)) {
         return ONLP_STATUS_E_INTERNAL;
     }
-    uint32_t addr = dom_offset[pimId] + reg;
+    uint32_t addr = DomOffset[pimId] + reg;
     *pbmp = fbfpgaio_read(addr);
     return ONLP_STATUS_OK;
 }
@@ -710,11 +462,11 @@ static int get_ports_reset(uint32_t pimId, uint32_t *pbmp) {
 }
 
 static int write_pom_reg(uint32_t pimId, uint32_t reg, uint32_t value) {
-    if (pimId >= AIM_ARRAYSIZE(dom_offset)) {
+    if (pimId >= AIM_ARRAYSIZE(DomOffset)) {
         return ONLP_STATUS_E_INTERNAL;
     }
 
-    uint32_t addr = dom_offset[pimId] + reg;
+    uint32_t addr = DomOffset[pimId] + reg;
     return fbfpgaio_write(addr, value);
 }
 
@@ -724,5 +476,219 @@ static int set_ports_lpmode(uint32_t pimId, uint32_t value) {
 
 static int set_ports_reset(uint32_t pimId, uint32_t value) {
     return write_pom_reg(pimId, QSFP_RESET_REG, value);
+}
+
+
+static int
+config_sideBands(int port)
+{
+    uint32_t data, pim, pip;
+
+    pim = PORT_TO_PIM(port);
+    pip = PORT_OF_PIM(port);
+
+    /*Set reset = 0*/
+    read_pom_reg(pim, QSFP_RESET_REG, &data);
+    data &= ~(BIT(pip));
+    write_pom_reg(pim, QSFP_RESET_REG, data);
+    AIM_USLEEP(10000);
+    write_pom_reg(pim, QSFP_RESET_REG, data);
+    return 0;
+}
+
+#define RTC_MAX_LEN     128
+struct {
+    uint32_t  desc;
+    uint32_t  status;
+    uint32_t  wbuff;
+    uint32_t  rbuff;
+} static const RTCRegOffset[] = {
+    {0x500, 0x600, 0x2000, 0x3000},
+    {0x520, 0x604, 0x2200, 0x3200},
+    {0x540, 0x608, 0x2400, 0x3400},
+    {0x560, 0x60c, 0x2600, 0x3600},
+    {0x580, 0x610, 0x2800, 0x3800},
+};
+
+typedef enum {
+    DO_WRITE = 0,
+    DO_READ = 1,
+} RorW;
+
+static int sleep_withRV(int us) {
+    AIM_USLEEP(us);
+    return 1;
+}
+static uint32_t
+assemble_cmd_w0(bool read, uint8_t length)
+{
+    uint8_t len = (length > RTC_MAX_LEN)? RTC_MAX_LEN: length;
+
+    return (read<<28) | len;
+}
+
+static uint32_t
+assemble_cmd_w1(uint8_t channel, uint8_t bank, uint8_t page, uint8_t offset)
+{
+    return (0x1 << 31) + (channel << 24) + (bank << 16) + (page << 8) + offset;
+}
+
+static int accessViaFPGA
+(int port, RorW toRead, uint8_t pos, uint32_t maxlen, uint32_t* data)
+{
+    uint32_t reg, mask, bp, pim, pip;
+    uint32_t rtc, ch, desc, cmd, len;
+
+    config_sideBands(port);
+
+    pim = PORT_TO_PIM(port);
+    pip = PORT_OF_PIM(port);
+    rtc = pip / 4;
+    ch  = pip % 4;
+    desc = 0;   /*Only use descriptor 0*/
+
+    /*Write 1 to clear flags*/
+    mask = 3;
+    bp = (desc*4);
+    write_pom_reg(pim, RTCRegOffset[rtc].status, mask << bp);
+    read_pom_reg(pim, RTCRegOffset[rtc].status, &reg);
+    if ((reg >> bp) &  mask) {
+        AIM_LOG_ERROR("Unable to clear RTC status for port(%d)(reg:0x%08x)", port, reg);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+
+    len = (maxlen+3)/4*4;   /*for word-aligned*/
+    len = (len > RTC_MAX_LEN)? RTC_MAX_LEN : len;
+    if (toRead == DO_WRITE) {
+        uint32_t i;
+        for(i=0; i<len; i+=4) {
+            write_pom_reg(pim, RTCRegOffset[rtc].wbuff+i, data[i]);
+        }
+    }
+
+    /*Issue command(2 words) */
+    cmd = assemble_cmd_w0(toRead, len);
+    write_pom_reg(pim, RTCRegOffset[rtc].desc, cmd);
+
+    cmd = assemble_cmd_w1(ch, 0, 0, pos);
+    write_pom_reg(pim, RTCRegOffset[rtc].desc+4, cmd);
+
+    /*wait for transacting.*/
+    AIM_USLEEP(10000 + len*100);
+
+    /*check if completed*/
+    uint32_t retry = 100;
+    do {
+        read_pom_reg(pim, RTCRegOffset[rtc].status, &reg);
+        retry--;
+        if(retry == 0) {
+            AIM_LOG_ERROR("Unable to RTC transaction failed(%02x), port(%d)",reg, port);
+            return ONLP_STATUS_E_INTERNAL;
+        }
+    } while(!((reg >> bp) & 1) && sleep_withRV(10000));
+
+    /*Copy data from FPGA buffer*/
+    if (toRead == DO_READ) {
+        uint32_t i;
+        for(i=0; i<len; i+=4) {
+            read_pom_reg(pim, RTCRegOffset[rtc].rbuff+i, data++);
+        }
+    }
+    return 0;
+}
+
+int
+onlp_sfpi_eeprom_read(int port, uint8_t data[256])
+{
+    int rv, i, m;
+
+    m = RTC_MAX_LEN;
+    for (i=0; i < 256; i += m) {
+        rv = accessViaFPGA(port, DO_READ, i, m, (uint32_t*)&data[i]);
+        if (rv) {
+            return rv;
+        }
+    }
+    return rv;
+}
+
+int
+onlp_sfpi_dev_writeb(int port, uint8_t devaddr, uint8_t addr, uint8_t value)
+{
+    int rv;
+    uint32_t data = value;
+
+    if (devaddr != 0x50) {
+        AIM_LOG_ERROR("Unable to read for addr 0x%02x of port(%d)\r\n", devaddr, port);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    rv = accessViaFPGA(port, DO_WRITE, addr, 1, &data);
+    return rv;
+}
+
+int
+onlp_sfpi_dev_writew(int port, uint8_t devaddr, uint8_t addr, uint16_t value)
+{
+    int rv;
+
+    rv = onlp_sfpi_dev_writeb(port, devaddr, addr, value & 0xff);
+    if(rv < 0) {
+        return rv;
+    }
+    rv = onlp_sfpi_dev_writeb(port, devaddr, addr+1, value >> 8);
+    return rv;
+}
+
+int
+onlp_sfpi_dev_readb(int port, uint8_t devaddr, uint8_t addr) {
+    int rv;
+    uint32_t data;
+
+    if (devaddr != 0x50) {
+        AIM_LOG_ERROR("Unable to read for addr 0x%02x of port(%d)\r\n", devaddr, port);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+
+    rv = accessViaFPGA(port, DO_READ, addr, 1, &data);
+    if(rv) {
+        return rv;
+    }
+    return (data & 0xff);
+}
+
+int
+onlp_sfpi_dev_readw(int port, uint8_t devaddr, uint8_t addr) {
+
+    /*Border problem.*/
+    if((addr % RTC_MAX_LEN) == (RTC_MAX_LEN - 1)) {
+        int data[2], rv;
+
+        rv = onlp_sfpi_dev_readb(port, devaddr, addr);
+        if(rv < 0) {
+            return rv;
+        }
+        data[0]= rv;
+        rv = onlp_sfpi_dev_readb(port, devaddr, addr + 1);
+        if(rv < 0) {
+            return rv;
+        }
+        data[1]= rv;
+
+        return data[0] | (data[1] << 8);
+    } else {
+        int rv;
+        uint32_t data;  //Assume little endian here.
+
+        if (devaddr != 0x50) {
+            AIM_LOG_ERROR("Unable to read for addr 0x%02x of port(%d)\r\n", devaddr, port);
+            return ONLP_STATUS_E_INTERNAL;
+        }
+
+        rv = accessViaFPGA(port, DO_READ, addr, 2, &data);
+        if(rv) {
+            return rv;
+        }
+        return (uint16_t)data;
+    }
 }
 
