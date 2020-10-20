@@ -380,6 +380,18 @@ class Base:
             if not self.installerCopy(basename, dst, True):
                 return
 
+            self.log.info("[ROY]cat dst")
+            cmd = "cat %s" % dst
+            os.system(cmd)
+
+            if os.path.getsize(dst) == 0:
+                cmd = "echo NETDEV=ma1 >  %s" % dst
+                os.system(cmd)
+                cmd = "echo BOOTMODE=INSTALLED >> %s" % dst
+                os.system(cmd)
+                cmd = "echo SWI=images::latest >> %s" % dst
+                os.system(cmd)
+
             with open(dst) as fd:
                 buf = fd.read()
 
