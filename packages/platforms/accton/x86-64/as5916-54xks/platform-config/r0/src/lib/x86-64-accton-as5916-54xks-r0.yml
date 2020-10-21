@@ -32,3 +32,18 @@ x86-64-accton-as5916-54xks-r0:
   ##    ma1:
   ##      name: ~
   ##      syspath: pci0000:00/0000:00:1c.0/0000:0a:00.0
+
+  installer:
+  - ONL-BOOT:
+      =: 1GiB
+      format: ext4
+  - ONL-CONFIG:
+      =: 128MiB
+      format: ext4
+  - ONL-IMAGES:
+      =: 1GiB
+      format: ext4
+  - ONL-DATA:
+      =: 100%
+      format: ext4
+
