@@ -93,7 +93,7 @@ pmbus_parse_literal_format(uint16_t value)
 int
 onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
 {
-    int pid, value, addr, ret = 0;
+    int pid, value, bus, addr, ret = 0;
     char file[32] = {0};
     char path[80] = {0};
     
@@ -126,7 +126,7 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
     info->status |= ONLP_PSU_STATUS_PRESENT;
     info->caps = ONLP_PSU_CAPS_AC; 
 
-    /* Get power good status 
+    /* Get power good status
      */
     ret = snprintf(file, sizeof(file), PSU_PWROK_FMT, pid);
     if( ret >= sizeof(file) ){
@@ -148,12 +148,24 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
         return ONLP_STATUS_OK;
     }
 
-
-    /* Get input output power status
+    /* open i2c mux channels for PSUs
      */
-    value = (pid == PSU1_ID) ? 0x2 : 0x1; /* mux channel for psu */
-    if (bmc_i2c_write_quick_mode(7, 0x70, value) < 0) {
-        AIM_LOG_ERROR("Unable to set i2c device (7/0x70)\r\n");
+    bus = 7;
+    addr = 0x70;
+    value = bmc_i2c_readb(bus, addr, 0);
+
+    printf("[ROY]%d: value[%d]\n", __LINE__, value);    
+    if (value >= 0) {
+        value |= 0x03; /*Open both PSU channels.*/
+        printf("[ROY]%d: value:[0x%x]\n", __LINE__, value);         
+        if (bmc_i2c_write_quick_mode(bus, addr, value) < 0) {
+            AIM_LOG_ERROR("Unable to set i2c device (%d/0x%02x)\r\n",
+                bus, addr);
+            return ONLP_STATUS_E_INTERNAL;
+        }
+    } else {
+            AIM_LOG_ERROR("Unable to get i2c device (%d/0x%02x)\r\n",
+                bus, addr);
         return ONLP_STATUS_E_INTERNAL;
     }
     usleep(1200);

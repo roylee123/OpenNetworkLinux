@@ -23,6 +23,7 @@
  *
  ***********************************************************/
 #include <termios.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <onlplib/file.h>
@@ -90,6 +91,26 @@ static int tty_exec_buf(unsigned long udelay, const char *str)
     read(tty_fd, tty_buf, MAXIMUM_TTY_BUFFER_LENGTH);
     return (strstr(tty_buf, str) != NULL) ? 0 : -1;
 }
+
+/*Clear Rx buffer by reading it out.*/
+static int tty_clear_rxbuf(void) {
+    //int ret;
+    
+    if (tty_fd < 0)
+        return -1;
+
+    read(tty_fd, tty_buf, MAXIMUM_TTY_BUFFER_LENGTH);
+    memset(tty_buf, 0, MAXIMUM_TTY_BUFFER_LENGTH);
+    /*if (ret == -1) {
+        AIM_LOG_ERROR("ERROR: Cannot read tty(%s)\n", strerror(errno));
+        return ONLP_STATUS_E_GENERIC;
+    } else {
+        memset(tty_buf, 0, MAXIMUM_TTY_BUFFER_LENGTH);    
+    }*/
+    return ONLP_STATUS_OK;
+}
+
+
 
 static int tty_login(void)
 {
@@ -275,31 +296,51 @@ int
 bmc_command_read_int(int* value, char *cmd, int base)
 {
     int len;
-    int i;
+    int i, retry, ret;
     char *prev_str = NULL;
     char *current_str= NULL;
-    if (bmc_send_command(cmd) < 0) {
-        return ONLP_STATUS_E_INTERNAL;
-    }
-    len = (int)strlen(cmd);
-    prev_str = strstr(tty_buf, cmd);
-    if (prev_str == NULL) {
-        return -1;
-    }
-    for (i = 1; i <= TTY_RETRY; i++) {
-        current_str = strstr(prev_str + len, cmd);
-        if(current_str == NULL) {
-            if( !chk_numeric_char(prev_str + len, base) ){
-                return -1;
-            }
-            *value = strtoul(prev_str + len, NULL, base);
-            break;
-        }else {
-            prev_str = current_str;
+
+    ret = -1;
+    retry = TTY_RETRY;
+    do {
+        tty_clear_rxbuf();
+        retry--;
+        if (bmc_send_command(cmd) < 0) {
+            return ONLP_STATUS_E_INTERNAL;
+        }
+
+        printf("[ROY]%d-%d: cmd:[%s] \n", retry, __LINE__, cmd);
+
+        printf("[ROY]%d: tty_buf:[%s]\n", __LINE__, tty_buf);    
+        len = (int)strlen(cmd);
+        prev_str = strstr(tty_buf, cmd);
+        if (prev_str == NULL) {
+            ret = -1;
             continue;
         }
-    }
-    return 0;
+
+        printf("[ROY]%d: prev_str:[%s]\n", __LINE__, prev_str);     
+        for (i = 1; i <= TTY_RETRY; i++) {
+            current_str = strstr(prev_str + len, cmd);
+            if(current_str == NULL) {
+                if( !chk_numeric_char(prev_str + len, base) ){
+                    ret = -1;
+                    continue;
+                }
+                *value = strtoul(prev_str + len, NULL, base);
+                ret = 0;
+                goto exit;
+            }else {
+                prev_str = current_str;
+                ret = -1;
+                continue;
+            }
+        }
+        ret = -1;
+    }while(retry);
+
+exit:
+    return ret;
 }
 
 
