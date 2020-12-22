@@ -312,7 +312,19 @@ bmc_file_read_int(int* value, char *file, int base)
 }
 
 int
-bmc_i2c_readb(uint8_t bus, uint8_t devaddr, uint8_t addr)
+bmc_i2c_readb(uint8_t bus, uint8_t devaddr)
+{
+    int ret = 0, value;
+    char cmd[64] = {0};
+
+    snprintf(cmd, sizeof(cmd), "i2cget -f -y %d 0x%x\r\n", bus, devaddr);
+    ret = bmc_command_read_int(&value, cmd, 16);
+    return (ret < 0) ? ret : value;
+}
+
+
+int
+bmc_i2c_readbdata(uint8_t bus, uint8_t devaddr, uint8_t addr)
 {
     int ret = 0, value;
     char cmd[64] = {0};
